@@ -17,8 +17,9 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   final auth = AuthService();
 
   List<OrderModel> orders = [];
+
   bool loading = true;
-  bool _isCancelling = false; // Tambahkan ini
+  bool _isCancelling = false;
 
   final rupiah = NumberFormat.currency(
     locale: "id_ID",
@@ -33,27 +34,31 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Future<void> loadOrders() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+    });
 
     try {
       final id = await auth.getUserId();
-      if (id != null) {
-        orders = await orderService.getCustomerOrders(id);
-      }
+
+      final result = await orderService.getCustomerOrders(id);
+
+      result.sort((a, b) => b.id.compareTo(a.id));
+
+      orders = result;
     } catch (e) {
-      print('Error loading orders: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memuat pesanan: $e'),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      debugPrint("Error loading orders: $e");
+
+      if (!mounted) return;
+
+      showMsg("Gagal memuat pesanan: $e", success: false);
     }
 
-    if (mounted) setState(() => loading = false);
+    if (mounted) {
+      setState(() {
+        loading = false;
+      });
+    }
   }
 
   String statusText(String status) {
@@ -105,33 +110,72 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   IconData statusIcon(String status) {
     switch (status) {
       case "pending":
-        return Icons.pending_actions;
+        return Icons.pending_actions_rounded;
       case "accepted":
-        return Icons.check_circle_outline;
+        return Icons.check_circle_outline_rounded;
       case "picked_up":
-        return Icons.local_shipping;
+        return Icons.local_shipping_rounded;
       case "washing":
-        return Icons.cleaning_services;
+        return Icons.local_laundry_service_rounded;
       case "ready":
-        return Icons.done_all;
+        return Icons.done_all_rounded;
       case "delivered":
-        return Icons.check_circle;
+        return Icons.check_circle_rounded;
       case "rejected":
-        return Icons.cancel;
+        return Icons.cancel_rounded;
       case "cancelled":
-        return Icons.remove_circle;
+        return Icons.remove_circle_rounded;
       default:
-        return Icons.info;
+        return Icons.info_rounded;
     }
   }
 
-  // ** METHOD UNTUK CANCEL ORDER **
+  bool canCancelOrder(String status) {
+    return status == "pending";
+  }
+
+  bool isFinalStatus(String status) {
+    return status == "delivered" ||
+        status == "rejected" ||
+        status == "cancelled";
+  }
+
+  int get totalOrders {
+    return orders.length;
+  }
+
+  int get activeOrders {
+    return orders.where((order) {
+      return order.status == "pending" ||
+          order.status == "accepted" ||
+          order.status == "picked_up" ||
+          order.status == "washing" ||
+          order.status == "ready";
+    }).length;
+  }
+
+  int get finishedOrders {
+    return orders.where((order) {
+      return order.status == "delivered";
+    }).length;
+  }
+
+  void showMsg(String msg, {required bool success}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: success ? Colors.green.shade700 : Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   Future<void> _cancelOrder(OrderModel order) async {
     setState(() {
       _isCancelling = true;
     });
 
-    // Tampilkan loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -143,7 +187,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(color: Colors.blue),
+              const CircularProgressIndicator(),
               const SizedBox(height: 16),
               Text(
                 "Membatalkan pesanan...",
@@ -156,94 +200,71 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
     );
 
     try {
-      // Panggil API cancel order
       final result = await orderService.cancelOrder(order.id);
 
-      // Tutup loading dialog
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
 
       if (!mounted) return;
 
-      if (result['success'] == true) {
-        // Refresh daftar pesanan
+      if (result["success"] == true) {
         await loadOrders();
-        
-        // Tampilkan pesan sukses
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Expanded(child: Text("Pesanan berhasil dibatalkan")),
-              ],
-            ),
-            backgroundColor: Colors.green.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+
+        if (!mounted) return;
+
+        showMsg("Pesanan berhasil dibatalkan", success: true);
       } else {
-        // Tampilkan pesan error
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    result['message'] ?? 'Gagal membatalkan pesanan',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 3),
-          ),
+        showMsg(
+          result["message"] ?? "Gagal membatalkan pesanan",
+          success: false,
         );
       }
     } catch (e) {
-      // Tutup loading dialog jika error
-      if (mounted) Navigator.pop(context);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      if (!mounted) return;
+
+      showMsg("Gagal membatalkan pesanan: $e", success: false);
     }
 
-    setState(() {
-      _isCancelling = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isCancelling = false;
+      });
+    }
   }
 
-  // ** DIALOG KONFIRMASI CANCEL **
   void _showCancelDialog(OrderModel order) {
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
           ),
           title: Row(
             children: [
-              Icon(Icons.warning_amber_rounded, 
-                color: Colors.red.shade700,
-                size: 28,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.red.shade700,
+                ),
               ),
               const SizedBox(width: 12),
-              const Text(
-                "Batalkan Pesanan",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              const Expanded(
+                child: Text(
+                  "Batalkan Pesanan",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
               ),
             ],
           ),
@@ -253,14 +274,20 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
             children: [
               Text(
                 "Apakah Anda yakin ingin membatalkan pesanan ini?",
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.all(12),
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,20 +299,20 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
                       "${order.serviceName} • ${order.weight} kg",
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 12.5,
                         color: Colors.grey.shade600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
                       rupiah.format(order.totalPrice),
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
                         color: Colors.red.shade700,
                       ),
                     ),
@@ -294,34 +321,28 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Pesanan yang dibatalkan tidak dapat dikembalikan.",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red.shade400,
-                ),
+                "Pesanan yang sudah dibatalkan tidak dapat dikembalikan.",
+                style: TextStyle(fontSize: 12, color: Colors.red.shade400),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey.shade600,
-              ),
               child: const Text("Kembali"),
             ),
             ElevatedButton(
               onPressed: _isCancelling
                   ? null
                   : () {
-                      Navigator.pop(context); // Tutup dialog
-                      _cancelOrder(order); // Panggil cancel
+                      Navigator.pop(context);
+                      _cancelOrder(order);
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade700,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: const Text("Ya, Batalkan"),
@@ -332,383 +353,558 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
     );
   }
 
-  Widget orderCard(OrderModel order) {
-    final bool canCancel = order.status == "pending";
-    
+  Widget _buildHeader() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: Colors.grey.shade100),
+      height: 100,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.blue.shade700,
+            Colors.blue.shade600,
+            Colors.blue.shade400,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: InkWell(
-          onTap: () {
-            // Optional: Navigate to order detail
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -40,
+            top: -35,
+            child: Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.10),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 65,
+            bottom: -60,
+            child: Container(
+              width: 145,
+              height: 145,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            child: Row(
               children: [
-                // Header: Nama Laundry dan Status
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade100, Colors.blue.shade50],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(Icons.local_laundry_service, 
-                        color: Colors.blue.shade700, 
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            order.laundryName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor(order.status).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  statusIcon(order.status),
-                                  size: 12,
-                                  color: statusColor(order.status),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  statusText(order.status),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: statusColor(order.status),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Menu button (optional)
-                    IconButton(
-                      onPressed: () {
-                        // Add more options if needed
-                      },
-                      icon: Icon(Icons.more_vert, 
-                        color: Colors.grey.shade400,
-                        size: 20,
-                      ),
-                    ),
-                  ],
+                _headerIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  onTap: () => Navigator.pop(context),
                 ),
-                const SizedBox(height: 16),
-                // Detail Pesanan
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                const SizedBox(width: 12),
+                const Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoRow(
-                        Icons.cleaning_services,
-                        "Layanan",
-                        order.serviceName,
-                      ),
-                      const SizedBox(height: 12),
-                      _infoRow(
-                        Icons.fitness_center,
-                        "Berat",
-                        "${order.weight} kg",
-                      ),
-                      const SizedBox(height: 12),
-                      _infoRow(
-                        Icons.receipt,
-                        "Total Harga",
-                        rupiah.format(order.totalPrice),
-                        isPrice: true,
-                      ),
-                      if (order.pickupAddress.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _infoRow(
-                          Icons.location_on,
-                          "Alamat Pickup",
-                          order.pickupAddress,
-                          isMultiline: true,
+                      Text(
+                        "Status Pesanan",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                      if (order.note != null && order.note!.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _infoRow(
-                          Icons.note_add,
-                          "Catatan",
-                          order.note!,
-                          isMultiline: true,
-                        ),
-                      ],
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        "Pantau proses laundry Anda",
+                        style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                      ),
                     ],
                   ),
                 ),
-                // Tombol Aksi (jika status pending)
-                if (order.status == "pending") ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _isCancelling ? null : () => _showCancelDialog(order),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red.shade700,
-                            side: BorderSide(color: Colors.red.shade700),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: _isCancelling 
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.red,
-                                  ),
-                                )
-                              : const Text("Batalkan"),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // Track order or contact laundry
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text("Lacak Pesanan"),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                // Tombol untuk status selesai
-                if (order.status == "delivered") ...[
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      // Show rating dialog
-                    },
-                    icon: const Icon(Icons.star_border),
-                    label: const Text("Beri Rating"),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.amber.shade700,
-                      side: BorderSide(color: Colors.amber.shade700),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ],
-                // Status cancelled indicator
-                if (order.status == "cancelled") ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.info_outline, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Pesanan ini telah dibatalkan",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                _headerIconButton(
+                  icon: Icons.refresh_rounded,
+                  onTap: loadOrders,
+                ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, {
-    bool isPrice = false,
-    bool isMultiline = false,
+  Widget _headerIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
   }) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
+
+  Widget _buildSummarySection() {
     return Row(
-      crossAxisAlignment: isMultiline 
-          ? CrossAxisAlignment.start 
-          : CrossAxisAlignment.center,
       children: [
-        Icon(icon, size: 16, color: Colors.grey.shade500),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 90,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-            ),
+        Expanded(
+          child: _summaryCard(
+            title: "Total",
+            value: "$totalOrders",
+            icon: Icons.receipt_long_rounded,
+            color: Colors.blue,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isPrice ? FontWeight.bold : FontWeight.normal,
-              color: isPrice ? Colors.green.shade700 : Colors.grey.shade800,
-            ),
-            maxLines: isMultiline ? null : 1,
-            overflow: isMultiline ? TextOverflow.visible : TextOverflow.ellipsis,
+          child: _summaryCard(
+            title: "Aktif",
+            value: "$activeOrders",
+            icon: Icons.local_laundry_service_rounded,
+            color: Colors.orange,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _summaryCard(
+            title: "Selesai",
+            value: "$finishedOrders",
+            icon: Icons.check_circle_rounded,
+            color: Colors.green,
           ),
         ),
       ],
     );
   }
 
+  Widget _summaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 21),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle() {
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(Icons.history_rounded, color: Colors.blue.shade700),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Text(
+            "Riwayat Pesanan",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget orderCard(OrderModel order) {
+    final color = statusColor(order.status);
+    final canCancel = canCancelOrder(order.status);
+    final finalStatus = isFinalStatus(order.status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(statusIcon(order.status), color: color, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.laundryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    _statusBadge(order.status),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "#${order.id}",
+                  style: TextStyle(
+                    color: Colors.blue.shade700,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                _infoRow(
+                  Icons.cleaning_services_rounded,
+                  "Layanan",
+                  order.serviceName,
+                ),
+                const SizedBox(height: 11),
+                _infoRow(
+                  Icons.monitor_weight_outlined,
+                  "Berat",
+                  "${order.weight} kg",
+                ),
+                const SizedBox(height: 11),
+                _infoRow(
+                  Icons.payments_rounded,
+                  "Total",
+                  rupiah.format(order.totalPrice),
+                  isPrice: true,
+                ),
+                if (order.pickupAddress.trim().isNotEmpty) ...[
+                  const SizedBox(height: 11),
+                  _infoRow(
+                    Icons.location_on_rounded,
+                    "Alamat",
+                    order.pickupAddress,
+                    isMultiline: true,
+                  ),
+                ],
+                if (order.note.trim().isNotEmpty) ...[
+                  const SizedBox(height: 11),
+                  _infoRow(
+                    Icons.note_add_rounded,
+                    "Catatan",
+                    order.note,
+                    isMultiline: true,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (canCancel) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isCancelling
+                    ? null
+                    : () {
+                        _showCancelDialog(order);
+                      },
+                icon: _isCancelling
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cancel_outlined),
+                label: Text(
+                  _isCancelling ? "Membatalkan..." : "Batalkan Pesanan",
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade200),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ] else if (finalStatus) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withOpacity(0.18)),
+              ),
+              child: Row(
+                children: [
+                  Icon(statusIcon(order.status), color: color, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Pesanan ${statusText(order.status).toLowerCase()}",
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statusBadge(String status) {
+    final color = statusColor(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.20)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(statusIcon(status), size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(
+            statusText(status),
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(
+    IconData icon,
+    String label,
+    String value, {
+    bool isPrice = false,
+    bool isMultiline = false,
+  }) {
+    return Row(
+      crossAxisAlignment: isMultiline
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 17,
+          color: isPrice ? Colors.green.shade700 : Colors.grey.shade600,
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 68,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: isMultiline ? null : 1,
+            overflow: isMultiline
+                ? TextOverflow.visible
+                : TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              fontWeight: isPrice ? FontWeight.bold : FontWeight.w500,
+              color: isPrice ? Colors.green.shade700 : Colors.grey.shade800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _emptyOrderState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 44),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 70,
+            color: Colors.grey.shade300,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            "Belum ada pesanan",
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Mulai buat pesanan laundry pertama Anda.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          ),
+          const SizedBox(height: 18),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.add_rounded),
+            label: const Text("Buat Pesanan"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderList() {
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (orders.isEmpty) {
+      return _emptyOrderState();
+    }
+
+    return Column(children: orders.map(orderCard).toList());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Text(
-          "Status Pesanan",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.arrow_back, size: 20),
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: loadOrders,
-            icon: const Icon(Icons.refresh),
-            tooltip: "Refresh",
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: loadOrders,
-        color: Colors.blue,
-        child: loading
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: loadOrders,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
                   children: [
-                    CircularProgressIndicator(color: Colors.blue),
-                    SizedBox(height: 16),
-                    Text("Memuat pesanan..."),
+                    _buildSummarySection(),
+                    const SizedBox(height: 18),
+                    _buildSectionTitle(),
+                    const SizedBox(height: 14),
+                    _buildOrderList(),
                   ],
                 ),
-              )
-            : orders.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.receipt_long, 
-                          size: 80, 
-                          color: Colors.grey.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Belum ada pesanan",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Mulai buat pesanan laundry pertama Anda",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade400,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          icon: const Icon(Icons.add),
-                          label: const Text("Buat Pesanan"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: orders.length,
-                    itemBuilder: (context, index) => orderCard(orders[index]),
-                  ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
