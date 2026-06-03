@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "422089471520",
+    "project_id": "londree-app-e8336",
+    "storage_bucket": "londree-app-e8336.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422089471520:android:cb06c7d5f069698cc1ee45",
+        "android_client_info": {
+          "package_name": "com.example.londree_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "422089471520-s2o6a0jhisms35sa5534np3fqpiiafav.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.londree_app",
+            "certificate_hash": "a7960e97c44ffe398f864fcc34da6ce84aae04d4"
+          }
+        },
+        {
+          "client_id": "422089471520-7t8t6ub5atnhkuof2ameituo6jrs2663.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjRqVcX-myFdlTt0EYJg3glJOP8O8D4mQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "422089471520-7t8t6ub5atnhkuof2ameituo6jrs2663.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
