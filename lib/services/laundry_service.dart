@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
@@ -39,22 +41,31 @@ class LaundryService {
     required String address,
     required double latitude,
     required double longitude,
+    File? photo,
   }) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/laundry/add_laundry.php");
 
-    final response = await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "owner_id": ownerId,
-        "name": name,
-        "description": description,
-        "address": address,
-        "latitude": latitude,
-        "longitude": longitude,
-        "is_open": 1,
-      }),
-    );
+    final request = http.MultipartRequest("POST", url);
+
+    request.fields["owner_id"] = ownerId.toString();
+    request.fields["name"] = name;
+    request.fields["description"] = description;
+    request.fields["address"] = address;
+    request.fields["latitude"] = latitude.toString();
+    request.fields["longitude"] = longitude.toString();
+    request.fields["is_open"] = "1";
+
+    if (photo != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "photo",
+          photo.path,
+        ),
+      );
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
 
     return jsonDecode(response.body);
   }

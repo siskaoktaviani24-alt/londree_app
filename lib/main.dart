@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:londree_app/screens/owner/manage_services_screen.dart';
 
 import 'firebase_options.dart';
 
@@ -56,6 +57,7 @@ class LondreeApp extends StatelessWidget {
         '/order-status': (context) => const OrderStatusScreen(),
         '/owner-home': (context) => const OwnerHomeScreen(),
         '/manage-laundry': (context) => const ManageLaundryScreen(),
+        '/manage-services': (context) => const ManageServicesScreen(),
         '/order-manage': (context) => const OrderManageScreen(),
       },
     );
