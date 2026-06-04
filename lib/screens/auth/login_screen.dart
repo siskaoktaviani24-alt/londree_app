@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 
@@ -36,6 +38,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result["success"] == true) {
+        await context.read<AuthProvider>().loadSession();
+
+        if (!mounted) return;
+
         final role = result["user"]["role"];
 
         if (role == "owner") {
@@ -58,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (bottomSheetContext) {
         return SafeArea(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -87,14 +93,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const Text(
                     "Login Google sebagai apa?",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
                   const SizedBox(height: 8),
 
                   Text(
                     "Pilih jenis akun yang ingin digunakan",
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 14,
+                    ),
                     textAlign: TextAlign.center,
                   ),
 
@@ -113,7 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       leading: CircleAvatar(
                         backgroundColor: Colors.blue.shade50,
-                        child: Icon(Icons.person, color: Colors.blue.shade700),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.blue.shade700,
+                        ),
                       ),
                       title: const Text(
                         "Pemesan Laundry",
@@ -122,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       subtitle: const Text("Mencari dan memesan jasa laundry"),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        Navigator.pop(context, "customer");
+                        Navigator.pop(bottomSheetContext, "customer");
                       },
                     ),
                   ),
@@ -142,7 +157,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       leading: CircleAvatar(
                         backgroundColor: Colors.blue.shade50,
-                        child: Icon(Icons.store, color: Colors.blue.shade700),
+                        child: Icon(
+                          Icons.store,
+                          color: Colors.blue.shade700,
+                        ),
                       ),
                       title: const Text(
                         "Pemilik Laundry",
@@ -151,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       subtitle: const Text("Mengelola laundry dan pesanan"),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        Navigator.pop(context, "owner");
+                        Navigator.pop(bottomSheetContext, "owner");
                       },
                     ),
                   ),
@@ -181,6 +199,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result["success"] == true) {
+        await context.read<AuthProvider>().loadSession();
+
+        if (!mounted) return;
+
         final role = result["user"]["role"];
 
         if (role == "owner") {
@@ -204,7 +226,9 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(msg),
         backgroundColor: Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
       ),
     );
   }
@@ -253,7 +277,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(width: 12),
                   const Text(
                     "Login dengan Google",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -294,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -328,7 +355,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 20,
                           offset: const Offset(0, -5),
                         ),
@@ -454,7 +481,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             Text(
                               "Belum punya akun? ",
-                              style: TextStyle(color: Colors.grey.shade600),
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                              ),
                             ),
                             TextButton(
                               onPressed: () {

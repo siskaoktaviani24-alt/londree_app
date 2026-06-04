@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/api_config.dart';
 import '../../models/order_model.dart';
-import '../../services/auth_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/laundry_service.dart';
 import '../../services/order_service.dart';
 
@@ -18,7 +19,6 @@ class OwnerHomeScreen extends StatefulWidget {
 }
 
 class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
-  final AuthService _authService = AuthService();
   final LaundryService _laundryService = LaundryService();
   final OrderService _orderService = OrderService();
 
@@ -113,7 +113,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   Future<void> _loadLaundryData() async {
     try {
-      final ownerId = await _authService.getUserId();
+      final ownerId = await context.read<AuthProvider>().getCurrentUserId();
       final result = await _laundryService.getOwnerLaundry(ownerId);
 
       if (!mounted) return;
@@ -167,7 +167,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     }
 
     try {
-      final ownerId = await _authService.getUserId();
+      final ownerId = await context.read<AuthProvider>().getCurrentUserId();
       final data = await _orderService.getOwnerOrders(ownerId);
 
       data.sort((a, b) => b.id.compareTo(a.id));
@@ -467,7 +467,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> logout(BuildContext context) async {
-    await _authService.logout();
+    await context.read<AuthProvider>().logout();
 
     if (!context.mounted) return;
 

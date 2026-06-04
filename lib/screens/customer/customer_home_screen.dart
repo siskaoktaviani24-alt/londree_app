@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/laundry_model.dart';
-import '../../services/auth_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/laundry_service.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
@@ -14,13 +15,12 @@ class CustomerHomeScreen extends StatefulWidget {
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final laundryService = LaundryService();
-  final auth = AuthService();
+  final searchC = TextEditingController();
 
   List<LaundryModel> laundries = [];
   bool loading = true;
   bool showGreetingCard = true;
 
-  String name = "";
   String searchQuery = "";
 
   double lat = -6.34800000;
@@ -30,7 +30,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void initState() {
     super.initState();
     loadGreetingCardState();
-    loadUser();
     loadLaundry();
   }
 
@@ -56,14 +55,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     });
   }
 
-  Future<void> loadUser() async {
-    name = await auth.getName();
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   Future<void> loadLaundry() async {
     setState(() {
       loading = true;
@@ -83,7 +74,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Future<void> logout() async {
-    await auth.logout();
+    await context.read<AuthProvider>().logout();
 
     if (!mounted) return;
 
@@ -115,6 +106,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Widget _buildCustomerNavbar() {
+    final authProvider = context.watch<AuthProvider>();
+    final customerName = authProvider.name == "Pengguna"
+        ? "Selamat Datang"
+        : authProvider.name;
+
     return Container(
       height: 195,
       width: double.infinity,
@@ -142,7 +138,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               width: 135,
               height: 135,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.10),
+                color: Colors.white.withValues(alpha: 0.10),
                 shape: BoxShape.circle,
               ),
             ),
@@ -155,7 +151,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               width: 150,
               height: 150,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
             ),
@@ -172,10 +168,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.45),
+                          color: Colors.white.withValues(alpha: 0.45),
                           width: 1.5,
                         ),
                       ),
@@ -197,13 +193,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             "Halo, Pemesan",
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.80),
+                              color: Colors.white.withValues(alpha: 0.80),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            name.isEmpty ? "Selamat Datang" : name,
+                            customerName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -225,7 +221,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                     const SizedBox(width: 8),
 
-                    _navIconButton(icon: Icons.logout_rounded, onTap: logout),
+                    _navIconButton(
+                      icon: Icons.logout_rounded,
+                      onTap: logout,
+                    ),
                   ],
                 ),
 
@@ -238,13 +237,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 12,
                         offset: const Offset(0, 5),
                       ),
                     ],
                   ),
                   child: TextField(
+                    controller: searchC,
                     onChanged: (value) {
                       setState(() {
                         searchQuery = value;
@@ -263,6 +263,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       suffixIcon: searchQuery.isNotEmpty
                           ? IconButton(
                               onPressed: () {
+                                searchC.clear();
+
                                 setState(() {
                                   searchQuery = "";
                                 });
@@ -294,17 +296,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Widget _navIconButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _navIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return Container(
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         shape: BoxShape.circle,
       ),
       child: IconButton(
         onPressed: onTap,
-        icon: Icon(icon, color: Colors.white, size: 26),
+        icon: Icon(
+          icon,
+          color: Colors.white,
+          size: 26,
+        ),
       ),
     );
   }
@@ -383,7 +392,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         Expanded(
           child: Text(
             "Laundry Terdekat (${filteredLaundries.length} laundry tersedia)",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
@@ -526,14 +538,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 13, color: color),
+          Icon(
+            icon,
+            size: 13,
+            color: color,
+          ),
           const SizedBox(width: 4),
           Text(
             text,
@@ -551,7 +570,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget _buildEmptyLaundry() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 42),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 42,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -578,12 +600,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ? "Belum ada laundry terdaftar saat ini."
                 : "Tidak ada laundry yang cocok dengan pencarian Anda.",
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 13,
+            ),
           ),
           if (searchQuery.isNotEmpty) ...[
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: () {
+                searchC.clear();
+
                 setState(() {
                   searchQuery = "";
                 });
@@ -601,7 +628,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     if (loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 50),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
@@ -622,11 +651,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.shade100),
+        border: Border.all(
+          color: Colors.orange.shade100,
+        ),
       ),
       child: Row(
         children: [
-          Icon(Icons.lightbulb_outline_rounded, color: Colors.orange.shade700),
+          Icon(
+            Icons.lightbulb_outline_rounded,
+            color: Colors.orange.shade700,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -641,6 +675,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    searchC.dispose();
+    super.dispose();
   }
 
   @override
