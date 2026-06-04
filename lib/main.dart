@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 
 import 'providers/auth_provider.dart';
+import 'providers/order_provider.dart';
 
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -22,18 +23,15 @@ import 'screens/owner/order_manage_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await GoogleSignIn.instance.initialize();
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => AuthProvider()..loadSession(),
-        ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..loadSession()),
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
       ],
       child: const LondreeApp(),
     ),

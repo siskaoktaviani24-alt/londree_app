@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/order_model.dart';
-import '../../services/auth_service.dart';
-import '../../services/order_service.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/order_provider.dart';
 
 class OrderStatusScreen extends StatefulWidget {
   const OrderStatusScreen({super.key});
@@ -13,12 +14,6 @@ class OrderStatusScreen extends StatefulWidget {
 }
 
 class _OrderStatusScreenState extends State<OrderStatusScreen> {
-  final orderService = OrderService();
-  final auth = AuthService();
-
-  List<OrderModel> orders = [];
-
-  bool loading = true;
   bool _isCancelling = false;
 
   final rupiah = NumberFormat.currency(
@@ -34,30 +29,16 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Future<void> loadOrders() async {
-    setState(() {
-      loading = true;
-    });
-
     try {
-      final id = await auth.getUserId();
+      final customerId = await context.read<AuthProvider>().getCurrentUserId();
 
-      final result = await orderService.getCustomerOrders(id);
-
-      result.sort((a, b) => b.id.compareTo(a.id));
-
-      orders = result;
+      await context.read<OrderProvider>().loadCustomerOrders(customerId);
     } catch (e) {
       debugPrint("Error loading orders: $e");
 
       if (!mounted) return;
 
       showMsg("Gagal memuat pesanan: $e", success: false);
-    }
-
-    if (mounted) {
-      setState(() {
-        loading = false;
-      });
     }
   }
 
@@ -140,26 +121,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
         status == "cancelled";
   }
 
-  int get totalOrders {
-    return orders.length;
-  }
-
-  int get activeOrders {
-    return orders.where((order) {
-      return order.status == "pending" ||
-          order.status == "accepted" ||
-          order.status == "picked_up" ||
-          order.status == "washing" ||
-          order.status == "ready";
-    }).length;
-  }
-
-  int get finishedOrders {
-    return orders.where((order) {
-      return order.status == "delivered";
-    }).length;
-  }
-
   void showMsg(String msg, {required bool success}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -200,7 +161,12 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
     );
 
     try {
-      final result = await orderService.cancelOrder(order.id);
+      final customerId = await context.read<AuthProvider>().getCurrentUserId();
+
+      final result = await context.read<OrderProvider>().cancelCustomerOrder(
+        customerId: customerId,
+        orderId: order.id,
+      );
 
       if (mounted) {
         Navigator.pop(context);
@@ -209,8 +175,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       if (!mounted) return;
 
       if (result["success"] == true) {
-        await loadOrders();
-
         if (!mounted) return;
 
         showMsg("Pesanan berhasil dibatalkan", success: true);
@@ -459,12 +423,14 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Widget _buildSummarySection() {
+    final orderProvider = context.watch<OrderProvider>();
+
     return Row(
       children: [
         Expanded(
           child: _summaryCard(
             title: "Total",
-            value: "$totalOrders",
+            value: "${orderProvider.totalCustomerOrders}",
             icon: Icons.receipt_long_rounded,
             color: Colors.blue,
           ),
@@ -473,7 +439,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
         Expanded(
           child: _summaryCard(
             title: "Aktif",
-            value: "$activeOrders",
+            value: "${orderProvider.activeCustomerOrders}",
             icon: Icons.local_laundry_service_rounded,
             color: Colors.orange,
           ),
@@ -482,7 +448,7 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
         Expanded(
           child: _summaryCard(
             title: "Selesai",
-            value: "$finishedOrders",
+            value: "${orderProvider.finishedCustomerOrders}",
             icon: Icons.check_circle_rounded,
             color: Colors.green,
           ),
@@ -865,7 +831,10 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   }
 
   Widget _buildOrderList() {
-    if (loading) {
+    final orderProvider = context.watch<OrderProvider>();
+    final orders = orderProvider.customerOrders;
+
+    if (orderProvider.loadingCustomerOrders) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 48),
         child: Center(child: CircularProgressIndicator()),

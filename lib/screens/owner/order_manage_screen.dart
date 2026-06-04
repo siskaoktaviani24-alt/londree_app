@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/order_model.dart';
-import '../../services/auth_service.dart';
-import '../../services/order_service.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/order_provider.dart';
 
 class OrderManageScreen extends StatefulWidget {
   const OrderManageScreen({super.key});
@@ -13,12 +14,6 @@ class OrderManageScreen extends StatefulWidget {
 }
 
 class _OrderManageScreenState extends State<OrderManageScreen> {
-  final orderService = OrderService();
-  final auth = AuthService();
-
-  List<OrderModel> orders = [];
-  bool loading = true;
-
   final rupiah = NumberFormat.currency(
     locale: "id_ID",
     symbol: "Rp ",
@@ -90,22 +85,21 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
   }
 
   Future<void> loadOrders() async {
-    setState(() => loading = true);
+    final ownerId = await context.read<AuthProvider>().getCurrentUserId();
 
-    final ownerId = await auth.getUserId();
-    orders = await orderService.getOwnerOrders(ownerId);
-
-    if (mounted) setState(() => loading = false);
+    await context.read<OrderProvider>().loadOwnerOrders(ownerId);
   }
 
   Future<void> updateStatus(OrderModel order, String status) async {
-    final result = await orderService.updateStatus(order.id, status);
+    final ownerId = await context.read<AuthProvider>().getCurrentUserId();
 
-    showMsg(result["message"]);
+    final result = await context.read<OrderProvider>().updateOwnerOrderStatus(
+      ownerId: ownerId,
+      orderId: order.id,
+      status: status,
+    );
 
-    if (result["success"] == true) {
-      loadOrders();
-    }
+    showMsg(result["message"] ?? "Status berhasil diperbarui");
   }
 
   void showMsg(String msg) {
@@ -129,10 +123,7 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Colors.blue.shade50.withOpacity(0.3),
-            ],
+            colors: [Colors.white, Colors.blue.shade50.withOpacity(0.3)],
           ),
         ),
         child: Padding(
@@ -145,7 +136,10 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.shade100,
                       borderRadius: BorderRadius.circular(20),
@@ -153,7 +147,11 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.receipt, size: 16, color: Colors.blue.shade800),
+                        Icon(
+                          Icons.receipt,
+                          size: 16,
+                          color: Colors.blue.shade800,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           "#${order.id}",
@@ -166,7 +164,10 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: getStatusColor(order.status).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -197,28 +198,41 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Customer Info
               _buildInfoRow(Icons.person_outline, order.customerName),
               const SizedBox(height: 8),
               _buildInfoRow(Icons.phone_outlined, order.customerPhone),
               const SizedBox(height: 12),
-              
+
               // Divider
               Divider(color: Colors.grey.shade200),
               const SizedBox(height: 8),
-              
+
               // Service Details
-              _buildServiceDetailRow(Icons.local_laundry_service, order.serviceName),
+              _buildServiceDetailRow(
+                Icons.local_laundry_service,
+                order.serviceName,
+              ),
               const SizedBox(height: 8),
-              _buildServiceDetailRow(Icons.fitness_center, "${order.weight} kg"),
+              _buildServiceDetailRow(
+                Icons.fitness_center,
+                "${order.weight} kg",
+              ),
               const SizedBox(height: 8),
-              _buildServiceDetailRow(Icons.payments_outlined, rupiah.format(order.totalPrice)),
+              _buildServiceDetailRow(
+                Icons.payments_outlined,
+                rupiah.format(order.totalPrice),
+              ),
               const SizedBox(height: 8),
-              _buildInfoRow(Icons.location_on_outlined, order.pickupAddress, maxLines: 2),
-              
+              _buildInfoRow(
+                Icons.location_on_outlined,
+                order.pickupAddress,
+                maxLines: 2,
+              ),
+
               const SizedBox(height: 16),
-              
+
               // Status Update Section
               Container(
                 padding: const EdgeInsets.all(12),
@@ -238,7 +252,7 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: order.status,
+                      initialValue: order.status,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.white,
@@ -246,7 +260,9 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
                       ),
                       items: statuses.map((s) {
                         return DropdownMenuItem(
@@ -272,7 +288,10 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                           updateStatus(order, value);
                         }
                       },
-                      icon: Icon(Icons.arrow_drop_down, color: Colors.blue.shade700),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.blue.shade700,
+                      ),
                       dropdownColor: Colors.white,
                       selectedItemBuilder: (context) {
                         return statuses.map((s) {
@@ -340,6 +359,10 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final orderProvider = context.watch<OrderProvider>();
+    final orders = orderProvider.ownerOrders;
+    final loading = orderProvider.loadingOwnerOrders;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -371,39 +394,39 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
                 ),
               )
             : orders.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 80,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Belum ada pesanan",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Pesanan akan muncul di sini",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 80,
+                      color: Colors.grey.shade400,
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: orders.length,
-                    itemBuilder: (context, index) => item(orders[index]),
-                  ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Belum ada pesanan",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Pesanan akan muncul di sini",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: orders.length,
+                itemBuilder: (context, index) => item(orders[index]),
+              ),
       ),
     );
   }

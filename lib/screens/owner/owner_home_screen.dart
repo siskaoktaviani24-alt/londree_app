@@ -8,8 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/api_config.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/order_provider.dart';
 import '../../services/laundry_service.dart';
-import '../../services/order_service.dart';
 
 class OwnerHomeScreen extends StatefulWidget {
   const OwnerHomeScreen({super.key});
@@ -20,21 +20,13 @@ class OwnerHomeScreen extends StatefulWidget {
 
 class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   final LaundryService _laundryService = LaundryService();
-  final OrderService _orderService = OrderService();
 
   bool _showWelcomeCard = false;
-  bool _loadingOrders = true;
-
-  int _unreadNotifications = 0;
 
   String? _laundryName;
   String? _laundryPhotoUrl;
 
-  List<OrderModel> _orders = [];
-
   Timer? _notificationTimer;
-  final Set<int> _knownPendingOrderIds = {};
-  bool _notificationReady = false;
 
   final rupiah = NumberFormat.currency(
     locale: "id_ID",
@@ -160,62 +152,22 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     bool showLoading = true,
     bool checkNewOrders = false,
   }) async {
-    if (showLoading) {
-      setState(() {
-        _loadingOrders = true;
-      });
-    }
-
     try {
       final ownerId = await context.read<AuthProvider>().getCurrentUserId();
-      final data = await _orderService.getOwnerOrders(ownerId);
 
-      data.sort((a, b) => b.id.compareTo(a.id));
-
-      final pendingOrders = data.where((order) {
-        return order.status == "pending";
-      }).toList();
-
-      final latestPendingIds = pendingOrders.map((order) => order.id).toSet();
-
-      final newOrders = pendingOrders.where((order) {
-        return !_knownPendingOrderIds.contains(order.id);
-      }).toList();
-
-      final shouldShowNotification =
-          checkNewOrders && _notificationReady && newOrders.isNotEmpty;
+      final newOrderCount = await context.read<OrderProvider>().loadOwnerOrders(
+        ownerId,
+        showLoading: showLoading,
+        checkNewOrders: checkNewOrders,
+      );
 
       if (!mounted) return;
 
-      setState(() {
-        _orders = data;
-        _unreadNotifications = pendingOrders.length;
-
-        _knownPendingOrderIds
-          ..clear()
-          ..addAll(latestPendingIds);
-
-        _notificationReady = true;
-      });
-
-      if (shouldShowNotification) {
-        _showNewOrderNotification(newOrders.length);
+      if (newOrderCount > 0) {
+        _showNewOrderNotification(newOrderCount);
       }
     } catch (e) {
-      debugPrint("Error loading orders: $e");
-
-      if (!mounted) return;
-
-      setState(() {
-        _orders = [];
-        _unreadNotifications = 0;
-      });
-    }
-
-    if (mounted && showLoading) {
-      setState(() {
-        _loadingOrders = false;
-      });
+      debugPrint("Error loading orders from provider: $e");
     }
   }
 
@@ -238,9 +190,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   void _showNotificationSheet() {
-    final pendingOrders = _orders.where((order) {
-      return order.status == "pending";
-    }).toList();
+    final pendingOrders = context.read<OrderProvider>().pendingOrders;
 
     showModalBottomSheet(
       context: context,
@@ -449,7 +399,13 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> _updateStatus(OrderModel order, String status) async {
-    final result = await _orderService.updateStatus(order.id, status);
+    final ownerId = await context.read<AuthProvider>().getCurrentUserId();
+
+    final result = await context.read<OrderProvider>().updateOwnerOrderStatus(
+      ownerId: ownerId,
+      orderId: order.id,
+      status: status,
+    );
 
     if (!mounted) return;
 
@@ -460,10 +416,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
-
-    if (result["success"] == true) {
-      await _loadOrders();
-    }
   }
 
   Future<void> logout(BuildContext context) async {
@@ -526,25 +478,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         status == "delivered";
   }
 
-  int get pendingCount {
-    return _orders.where((order) => order.status == "pending").length;
-  }
-
-  int get processCount {
-    return _orders.where((order) {
-      return [
-        "accepted",
-        "picked_up",
-        "washing",
-        "ready",
-      ].contains(order.status);
-    }).length;
-  }
-
-  int get doneCount {
-    return _orders.where((order) => order.status == "delivered").length;
-  }
-
   Widget _buildLaundryAvatar() {
     return Container(
       width: 58,
@@ -579,6 +512,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Widget _buildOwnerNavbar() {
+    final orderProvider = context.watch<OrderProvider>();
+    final unreadNotifications = orderProvider.unreadNotifications;
+
     return Container(
       height: 132,
       width: double.infinity,
@@ -697,7 +633,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                       icon: Icons.notifications_none_rounded,
                       onTap: _showNotificationSheet,
                     ),
-                    if (_unreadNotifications > 0)
+                    if (unreadNotifications > 0)
                       Positioned(
                         right: 2,
                         top: 2,
@@ -712,9 +648,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                             minHeight: 17,
                           ),
                           child: Text(
-                            _unreadNotifications > 9
+                            unreadNotifications > 9
                                 ? "9+"
-                                : "$_unreadNotifications",
+                                : "$unreadNotifications",
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 9,
@@ -792,12 +728,14 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Widget _buildSummarySection() {
+    final orderProvider = context.watch<OrderProvider>();
+
     return Row(
       children: [
         Expanded(
           child: _summaryCard(
             title: "Total",
-            value: "${_orders.length}",
+            value: "${orderProvider.totalOwnerOrders}",
             icon: Icons.receipt_long_rounded,
             color: Colors.blue,
           ),
@@ -806,7 +744,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         Expanded(
           child: _summaryCard(
             title: "Menunggu",
-            value: "$pendingCount",
+            value: "${orderProvider.pendingOwnerOrders}",
             icon: Icons.pending_actions_rounded,
             color: Colors.orange,
           ),
@@ -815,7 +753,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         Expanded(
           child: _summaryCard(
             title: "Proses",
-            value: "$processCount",
+            value: "${orderProvider.processOwnerOrders}",
             icon: Icons.local_laundry_service_rounded,
             color: Colors.purple,
           ),
@@ -973,6 +911,10 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Widget _buildOrdersSection() {
+    final orderProvider = context.watch<OrderProvider>();
+    final orders = orderProvider.ownerOrders;
+    final loadingOrders = orderProvider.loadingOwnerOrders;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1031,16 +973,16 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (_loadingOrders)
+          if (loadingOrders)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 30),
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (_orders.isEmpty)
+          else if (orders.isEmpty)
             _emptyOrders()
           else
             Column(
-              children: _orders.map((order) {
+              children: orders.map((order) {
                 return _orderItem(order);
               }).toList(),
             ),
