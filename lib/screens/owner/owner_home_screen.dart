@@ -419,6 +419,8 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> logout(BuildContext context) async {
+    context.read<OrderProvider>().clearOrders();
+
     await context.read<AuthProvider>().logout();
 
     if (!context.mounted) return;
@@ -1124,7 +1126,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                   ),
                 )
               : DropdownButtonFormField<String>(
-                  value: _statuses.contains(order.status) ? order.status : null,
+                  initialValue: _statuses.contains(order.status)
+                      ? order.status
+                      : null,
                   decoration: InputDecoration(
                     labelText: "Ubah Status",
                     filled: true,

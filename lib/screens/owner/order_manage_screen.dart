@@ -78,6 +78,12 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
     }
   }
 
+  bool isFinalStatus(String status) {
+    return status == "cancelled" ||
+        status == "rejected" ||
+        status == "delivered";
+  }
+
   @override
   void initState() {
     super.initState();
@@ -113,6 +119,8 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
   }
 
   Widget item(OrderModel order) {
+    final finalStatus = isFinalStatus(order.status);
+
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
@@ -237,83 +245,111 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: finalStatus
+                      ? getStatusColor(order.status).withOpacity(0.08)
+                      : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(12),
+                  border: finalStatus
+                      ? Border.all(
+                          color: getStatusColor(order.status).withOpacity(0.25),
+                        )
+                      : null,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Update Status",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: order.status,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                      ),
-                      items: statuses.map((s) {
-                        return DropdownMenuItem(
-                          value: s,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: getStatusColor(s),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(getStatusText(s)),
-                            ],
+                child: finalStatus
+                    ? Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            color: getStatusColor(order.status),
+                            size: 20,
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null && value != order.status) {
-                          updateStatus(order, value);
-                        }
-                      },
-                      icon: Icon(
-                        Icons.arrow_drop_down,
-                        color: Colors.blue.shade700,
-                      ),
-                      dropdownColor: Colors.white,
-                      selectedItemBuilder: (context) {
-                        return statuses.map((s) {
-                          return Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: getStatusColor(s),
-                                  shape: BoxShape.circle,
-                                ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Status ${getStatusText(order.status)} tidak dapat diubah lagi",
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: getStatusColor(order.status),
                               ),
-                              const SizedBox(width: 8),
-                              Text(getStatusText(s)),
-                            ],
-                          );
-                        }).toList();
-                      },
-                    ),
-                  ],
-                ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Update Status",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            initialValue: order.status,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            items: statuses.map((s) {
+                              return DropdownMenuItem(
+                                value: s,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: getStatusColor(s),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(getStatusText(s)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null && value != order.status) {
+                                updateStatus(order, value);
+                              }
+                            },
+                            icon: Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.blue.shade700,
+                            ),
+                            dropdownColor: Colors.white,
+                            selectedItemBuilder: (context) {
+                              return statuses.map((s) {
+                                return Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: getStatusColor(s),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(getStatusText(s)),
+                                  ],
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
