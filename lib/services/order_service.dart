@@ -10,6 +10,7 @@ class OrderService {
     required int laundryId,
     required int serviceId,
     required double weight,
+    required String customerPhone,
     required String pickupAddress,
     required String note,
   }) async {
@@ -23,6 +24,7 @@ class OrderService {
         "laundry_id": laundryId,
         "service_id": serviceId,
         "weight": weight,
+        "customer_phone": customerPhone,
         "pickup_address": pickupAddress,
         "note": note,
       }),
@@ -69,10 +71,7 @@ class OrderService {
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "order_id": orderId,
-        "status": status,
-      }),
+      body: jsonEncode({"order_id": orderId, "status": status}),
     );
 
     return jsonDecode(response.body);

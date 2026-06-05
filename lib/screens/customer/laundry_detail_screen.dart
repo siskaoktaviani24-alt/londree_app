@@ -191,312 +191,497 @@ class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
     }
 
     final weightC = TextEditingController();
+    final phoneC = TextEditingController();
     final addressC = TextEditingController();
     final noteC = TextEditingController();
 
     int selectedServiceId = services.first.id;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
+      barrierDismissible: true,
+      builder: (dialogContext) {
         return StatefulBuilder(
-          builder: (context, setModal) {
+          builder: (popupContext, setDialog) {
             final selected = services.firstWhere(
               (service) => service.id == selectedServiceId,
               orElse: () => services.first,
             );
 
-            double totalPrice = 0;
+            final weight = double.tryParse(weightC.text.trim()) ?? 0;
+            final totalPrice = weight * selected.pricePerKg;
 
-            if (weightC.text.trim().isNotEmpty) {
-              final weight = double.tryParse(weightC.text.trim()) ?? 0;
-              totalPrice = weight * selected.pricePerKg;
+            void closeOrderPopup() {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(dialogContext);
             }
 
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: SafeArea(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 12,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                  ),
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(popupContext).size.height * 0.88,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.16),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 46,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(18, 18, 12, 18),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.blue.shade700,
+                              Colors.blue.shade500,
+                            ],
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      Row(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: Icon(
-                              Icons.shopping_bag_rounded,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Buat Pesanan",
-                                  style: TextStyle(
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.35),
                                 ),
-                                SizedBox(height: 3),
-                                Text(
-                                  "Isi detail pesanan laundry Anda",
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.grey,
+                              ),
+                              child: const Icon(
+                                Icons.shopping_bag_rounded,
+                                color: Colors.white,
+                                size: 27,
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "Buat Pesanan",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Isi data laundry dan kontak customer",
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.84),
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
 
-                      const SizedBox(height: 20),
-
-                      DropdownButtonFormField<int>(
-                        value: selectedServiceId,
-                        isExpanded: true,
-                        decoration: orderInputDecoration(
-                          label: "Pilih Layanan",
-                          hint: "Pilih jenis layanan",
-                          icon: Icons.cleaning_services_rounded,
-                        ),
-                        items: services.map((service) {
-                          return DropdownMenuItem<int>(
-                            value: service.id,
-                            child: Text(
-                              "${service.serviceName} • ${rupiah.format(service.pricePerKg)}/kg",
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14),
+                            IconButton(
+                              onPressed: closeOrderPopup,
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setModal(() {
-                              selectedServiceId = value;
-                            });
-                          }
-                        },
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      TextField(
-                        controller: weightC,
-                        keyboardType: TextInputType.number,
-                        onChanged: (_) {
-                          setModal(() {});
-                        },
-                        decoration: orderInputDecoration(
-                          label: "Berat Laundry",
-                          hint: "Masukkan berat laundry",
-                          icon: Icons.fitness_center_rounded,
-                          suffixText: "kg",
+                          ],
                         ),
                       ),
 
-                      const SizedBox(height: 14),
-
-                      TextField(
-                        controller: addressC,
-                        maxLines: 2,
-                        decoration: orderInputDecoration(
-                          label: "Alamat Pickup",
-                          hint: "Masukkan alamat lengkap",
-                          icon: Icons.location_on_rounded,
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      TextField(
-                        controller: noteC,
-                        maxLines: 2,
-                        decoration: orderInputDecoration(
-                          label: "Catatan",
-                          hint: "Contoh: jemput sore, rumah pagar hitam",
-                          icon: Icons.note_add_rounded,
-                        ),
-                      ),
-
-                      if (weightC.text.trim().isNotEmpty &&
-                          double.tryParse(weightC.text.trim()) != null &&
-                          double.parse(weightC.text.trim()) > 0) ...[
-                        const SizedBox(height: 16),
-
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.blue.shade100),
-                          ),
-                          child: Row(
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  Icons.payments_rounded,
-                                  color: Colors.blue.shade700,
+                              Text(
+                                "Layanan Laundry",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade800,
                                 ),
                               ),
 
-                              const SizedBox(width: 12),
+                              const SizedBox(height: 8),
 
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              DropdownButtonFormField<int>(
+                                value: selectedServiceId,
+                                isExpanded: true,
+                                decoration: orderInputDecoration(
+                                  label: "Pilih Layanan",
+                                  hint: "Pilih jenis layanan",
+                                  icon: Icons.cleaning_services_rounded,
+                                ),
+                                items: services.map((service) {
+                                  return DropdownMenuItem<int>(
+                                    value: service.id,
+                                    child: Text(
+                                      "${service.serviceName} • ${rupiah.format(service.pricePerKg)}/kg",
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setDialog(() {
+                                      selectedServiceId = value;
+                                    });
+                                  }
+                                },
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              Text(
+                                "Data Pesanan",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              TextField(
+                                controller: weightC,
+                                keyboardType: TextInputType.number,
+                                onChanged: (_) {
+                                  setDialog(() {});
+                                },
+                                decoration: orderInputDecoration(
+                                  label: "Berat Laundry",
+                                  hint: "Masukkan berat laundry",
+                                  icon: Icons.monitor_weight_rounded,
+                                  suffixText: "kg",
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              TextField(
+                                controller: phoneC,
+                                keyboardType: TextInputType.phone,
+                                decoration: orderInputDecoration(
+                                  label: "Nomor Telepon",
+                                  hint: "Masukkan nomor telepon aktif",
+                                  icon: Icons.phone_rounded,
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              TextField(
+                                controller: addressC,
+                                maxLines: 2,
+                                decoration: orderInputDecoration(
+                                  label: "Alamat Pickup",
+                                  hint: "Masukkan alamat lengkap",
+                                  icon: Icons.location_on_rounded,
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              TextField(
+                                controller: noteC,
+                                maxLines: 2,
+                                decoration: orderInputDecoration(
+                                  label: "Catatan",
+                                  hint:
+                                      "Contoh: jemput sore, rumah pagar hitam",
+                                  icon: Icons.note_add_rounded,
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: weight > 0
+                                      ? Colors.blue.shade50
+                                      : Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: weight > 0
+                                        ? Colors.blue.shade100
+                                        : Colors.grey.shade200,
+                                  ),
+                                ),
+                                child: Row(
                                   children: [
-                                    const Text(
-                                      "Total Harga",
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
+                                    Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Icon(
+                                        Icons.payments_rounded,
+                                        color: weight > 0
+                                            ? Colors.blue.shade700
+                                            : Colors.grey.shade500,
                                       ),
                                     ),
-                                    const SizedBox(height: 3),
+
+                                    const SizedBox(width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            "Estimasi Total Harga",
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            weight > 0
+                                                ? "${weightC.text.trim()} kg x ${rupiah.format(selected.pricePerKg)}"
+                                                : "Masukkan berat laundry dulu",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
                                     Text(
-                                      "${weightC.text.trim()} kg x ${rupiah.format(selected.pricePerKg)}",
+                                      rupiah.format(totalPrice),
                                       style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
+                                        color: weight > 0
+                                            ? Colors.blue.shade700
+                                            : Colors.grey.shade600,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
 
-                              Text(
-                                rupiah.format(totalPrice),
-                                style: TextStyle(
-                                  color: Colors.blue.shade700,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
+                              const SizedBox(height: 10),
+
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.shade50,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.orange.shade100,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      color: Colors.orange.shade700,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        "Nomor telepon akan tampil di dashboard owner agar laundry mudah menghubungi customer.",
+                                        style: TextStyle(
+                                          fontSize: 12.3,
+                                          color: Colors.orange.shade800,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
+                      ),
 
-                      const SizedBox(height: 22),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            top: BorderSide(color: Colors.grey.shade100),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: closeOrderPopup,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.grey.shade700,
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                ),
+                                child: const Text("Batal"),
+                              ),
+                            ),
 
-                      CustomButton(
-                        text: "Pesan Sekarang",
-                        onPressed: () async {
-                          if (weightC.text.trim().isEmpty ||
-                              addressC.text.trim().isEmpty) {
-                            showMsg("Berat dan alamat harus diisi");
-                            return;
-                          }
+                            const SizedBox(width: 10),
 
-                          final weight = double.tryParse(weightC.text.trim());
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (weightC.text.trim().isEmpty ||
+                                      phoneC.text.trim().isEmpty ||
+                                      addressC.text.trim().isEmpty) {
+                                    showMsg(
+                                      "Berat, nomor telepon, dan alamat harus diisi",
+                                    );
+                                    return;
+                                  }
 
-                          if (weight == null || weight <= 0) {
-                            showMsg("Berat harus lebih dari 0");
-                            return;
-                          }
+                                  final weight = double.tryParse(
+                                    weightC.text.trim(),
+                                  );
 
-                          final authProvider = context.read<AuthProvider>();
-                          final customerId = await authProvider
-                              .getCurrentUserId();
-                          final customerName = authProvider.name;
+                                  if (weight == null || weight <= 0) {
+                                    showMsg("Berat harus lebih dari 0");
+                                    return;
+                                  }
 
-                          final selectedService = services.firstWhere(
-                            (service) => service.id == selectedServiceId,
-                          );
+                                  if (phoneC.text.trim().length < 10) {
+                                    showMsg("Nomor telepon minimal 10 digit");
+                                    return;
+                                  }
 
-                          final laundryId = int.parse(
-                            laundry!["id"].toString(),
-                          );
+                                  final authProvider = context
+                                      .read<AuthProvider>();
+                                  final customerId = await authProvider
+                                      .getCurrentUserId();
+                                  final customerName = authProvider.name;
 
-                          final result = await orderService.createOrder(
-                            customerId: customerId,
-                            laundryId: laundryId,
-                            serviceId: selectedService.id,
-                            weight: weight,
-                            pickupAddress: addressC.text.trim(),
-                            note: noteC.text.trim(),
-                          );
+                                  final selectedService = services.firstWhere(
+                                    (service) =>
+                                        service.id == selectedServiceId,
+                                  );
 
-                          if (!mounted) return;
+                                  final laundryId = int.parse(
+                                    laundry!["id"].toString(),
+                                  );
 
-                          showMsg(result["message"] ?? "Proses selesai");
+                                  final result = await orderService.createOrder(
+                                    customerId: customerId,
+                                    laundryId: laundryId,
+                                    serviceId: selectedService.id,
+                                    weight: weight,
+                                    customerPhone: phoneC.text.trim(),
+                                    pickupAddress: addressC.text.trim(),
+                                    note: noteC.text.trim(),
+                                  );
 
-                          if (result["success"] == true) {
-                            final responseData = result["data"] is Map
-                                ? Map<String, dynamic>.from(result["data"])
-                                : Map<String, dynamic>.from(result);
+                                  if (!mounted) return;
 
-                            final orderId =
-                                int.tryParse(
-                                  responseData["order_id"]?.toString() ?? "0",
-                                ) ??
-                                0;
+                                  showMsg(
+                                    result["message"] ?? "Proses selesai",
+                                  );
 
-                            final ownerId =
-                                int.tryParse(
-                                  responseData["owner_id"]?.toString() ?? "0",
-                                ) ??
-                                0;
+                                  if (result["success"] == true) {
+                                    final responseData = result["data"] is Map
+                                        ? Map<String, dynamic>.from(
+                                            result["data"],
+                                          )
+                                        : Map<String, dynamic>.from(result);
 
-                            if (ownerId > 0 && orderId > 0) {
-                              _sendNewOrderSocket(
-                                ownerId: ownerId,
-                                laundryId: laundryId,
-                                orderId: orderId,
-                                customerId: customerId,
-                                customerName: customerName,
-                              );
-                            } else {
-                              debugPrint(
-                                "Socket order:new tidak dikirim karena ownerId/orderId kosong",
-                              );
-                            }
+                                    final orderId =
+                                        int.tryParse(
+                                          responseData["order_id"]
+                                                  ?.toString() ??
+                                              "0",
+                                        ) ??
+                                        0;
 
-                            Navigator.pop(context);
-                            Navigator.pushNamed(context, "/order-status");
-                          }
-                        },
+                                    final ownerId =
+                                        int.tryParse(
+                                          responseData["owner_id"]
+                                                  ?.toString() ??
+                                              "0",
+                                        ) ??
+                                        0;
+
+                                    if (ownerId > 0 && orderId > 0) {
+                                      _sendNewOrderSocket(
+                                        ownerId: ownerId,
+                                        laundryId: laundryId,
+                                        orderId: orderId,
+                                        customerId: customerId,
+                                        customerName: customerName,
+                                      );
+                                    } else {
+                                      debugPrint(
+                                        "Socket order:new tidak dikirim karena ownerId/orderId kosong",
+                                      );
+                                    }
+
+                                    FocusManager.instance.primaryFocus
+                                        ?.unfocus();
+
+                                    Navigator.pop(dialogContext);
+
+                                    Navigator.pushNamed(
+                                      this.context,
+                                      "/order-status",
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue.shade700,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Pesan Sekarang",
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -506,7 +691,14 @@ class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
           },
         );
       },
-    );
+    ).then((_) async {
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      weightC.dispose();
+      phoneC.dispose();
+      addressC.dispose();
+      noteC.dispose();
+    });
   }
 
   Widget _buildHeader(Map<String, dynamic> data) {

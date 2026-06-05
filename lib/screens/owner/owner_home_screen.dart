@@ -464,6 +464,474 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     );
   }
 
+  void _showOrderDetailDialog(OrderModel order) {
+    String selectedStatus = order.status;
+    bool isStatusChanged = false;
+
+    final bool finalStatus = isFinalStatus(order.status);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final currentColor = getStatusColor(order.status);
+            final selectedColor = getStatusColor(selectedStatus);
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.82,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(26),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.18),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.blue.shade700,
+                              Colors.blue.shade500,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.35),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.receipt_long_rounded,
+                                color: Colors.white,
+                                size: 27,
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Pesanan #${order.id}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Detail dan pengelolaan status",
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.82),
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            IconButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: currentColor.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: currentColor.withOpacity(0.22),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: currentColor.withOpacity(0.14),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.info_outline_rounded,
+                                        color: currentColor,
+                                        size: 21,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Status Saat Ini",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            getStatusText(order.status),
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: currentColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 18),
+
+                              _detailSectionTitle("Informasi Customer"),
+
+                              _detailInfoTile(
+                                icon: Icons.person_outline_rounded,
+                                title: "Nama Customer",
+                                value: order.customerName,
+                              ),
+                              _detailInfoTile(
+                                icon: Icons.phone_outlined,
+                                title: "Nomor Telepon",
+                                value: order.customerPhone,
+                              ),
+                              _detailInfoTile(
+                                icon: Icons.location_on_outlined,
+                                title: "Alamat Pickup",
+                                value: order.pickupAddress,
+                                maxLines: 3,
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              _detailSectionTitle("Informasi Pesanan"),
+
+                              _detailInfoTile(
+                                icon: Icons.local_laundry_service_rounded,
+                                title: "Layanan",
+                                value: order.serviceName,
+                              ),
+                              _detailInfoTile(
+                                icon: Icons.monitor_weight_outlined,
+                                title: "Berat Laundry",
+                                value: "${order.weight} kg",
+                              ),
+                              _detailInfoTile(
+                                icon: Icons.payments_outlined,
+                                title: "Total Harga",
+                                value: rupiah.format(order.totalPrice),
+                                valueColor: Colors.green.shade700,
+                                boldValue: true,
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              _detailSectionTitle("Ubah Status"),
+
+                              if (finalStatus)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(13),
+                                  decoration: BoxDecoration(
+                                    color: currentColor.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: currentColor.withOpacity(0.22),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.lock_outline_rounded,
+                                        color: currentColor,
+                                        size: 21,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          "Status ${getStatusText(order.status)} tidak dapat diubah lagi.",
+                                          style: TextStyle(
+                                            fontSize: 12.8,
+                                            fontWeight: FontWeight.w600,
+                                            color: currentColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                DropdownButtonFormField<String>(
+                                  initialValue:
+                                      _statuses.contains(selectedStatus)
+                                      ? selectedStatus
+                                      : null,
+                                  decoration: InputDecoration(
+                                    labelText: "Pilih Status Baru",
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    prefixIcon: Icon(
+                                      Icons.sync_rounded,
+                                      color: selectedColor,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: selectedColor,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  items: _statuses.map((status) {
+                                    return DropdownMenuItem(
+                                      value: status,
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: BoxDecoration(
+                                              color: getStatusColor(status),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 9),
+                                          Text(getStatusText(status)),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+
+                                    setDialogState(() {
+                                      selectedStatus = value;
+                                      isStatusChanged = value != order.status;
+                                    });
+                                  },
+                                ),
+
+                              const SizedBox(height: 12),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            top: BorderSide(color: Colors.grey.shade100),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.grey.shade700,
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: Text(finalStatus ? "Tutup" : "Batal"),
+                              ),
+                            ),
+
+                            if (!finalStatus) ...[
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: isStatusChanged
+                                      ? () async {
+                                          Navigator.pop(dialogContext);
+                                          await _updateStatus(
+                                            order,
+                                            selectedStatus,
+                                          );
+                                        }
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade700,
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor:
+                                        Colors.grey.shade300,
+                                    disabledForegroundColor:
+                                        Colors.grey.shade600,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    "Simpan Status",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _detailSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade800,
+        ),
+      ),
+    );
+  }
+
+  Widget _detailInfoTile({
+    required IconData icon,
+    required String title,
+    required String value,
+    Color? valueColor,
+    bool boldValue = false,
+    int maxLines = 2,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: Colors.blue.shade700, size: 19),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: boldValue ? FontWeight.bold : FontWeight.w600,
+                    color: valueColor ?? Colors.grey.shade800,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> logout(BuildContext context) async {
     _socketService.disconnect();
 
@@ -1072,159 +1540,72 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Widget _orderItem(OrderModel order) {
-    final statusColor = getStatusColor(order.status);
-    final finalStatus = isFinalStatus(order.status);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        onTap: () {
+          _showOrderDetailDialog(order);
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  "#${order.id}",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "#${order.id}",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
                   ),
-                ),
+                  const Spacer(),
+                  _statusBadge(order.status),
+                ],
               ),
-              const Spacer(),
-              _statusBadge(order.status),
+
+              const SizedBox(height: 12),
+
+              _orderInfoRow(
+                icon: Icons.person_outline_rounded,
+                text: order.customerName,
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(height: 7),
+              _orderInfoRow(
+                icon: Icons.local_laundry_service_rounded,
+                text: "${order.serviceName} • ${order.weight} kg",
+                color: Colors.blue.shade700,
+              ),
+              const SizedBox(height: 7),
+              _orderInfoRow(
+                icon: Icons.payments_outlined,
+                text: rupiah.format(order.totalPrice),
+                color: Colors.green.shade700,
+                bold: true,
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          _orderInfoRow(
-            icon: Icons.person_outline_rounded,
-            text: order.customerName,
-            color: Colors.grey.shade700,
-          ),
-          const SizedBox(height: 7),
-          _orderInfoRow(
-            icon: Icons.phone_outlined,
-            text: order.customerPhone,
-            color: Colors.grey.shade700,
-          ),
-          const SizedBox(height: 7),
-          _orderInfoRow(
-            icon: Icons.local_laundry_service_rounded,
-            text: "${order.serviceName} • ${order.weight} kg",
-            color: Colors.blue.shade700,
-          ),
-          const SizedBox(height: 7),
-          _orderInfoRow(
-            icon: Icons.payments_outlined,
-            text: rupiah.format(order.totalPrice),
-            color: Colors.green.shade700,
-            bold: true,
-          ),
-          const SizedBox(height: 7),
-          _orderInfoRow(
-            icon: Icons.location_on_outlined,
-            text: order.pickupAddress,
-            color: Colors.grey.shade700,
-            maxLines: 2,
-          ),
-          const SizedBox(height: 14),
-          finalStatus
-              ? Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: statusColor.withOpacity(0.25)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        color: statusColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          "Status ${getStatusText(order.status)} tidak dapat diubah lagi",
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : DropdownButtonFormField<String>(
-                  initialValue: _statuses.contains(order.status)
-                      ? order.status
-                      : null,
-                  decoration: InputDecoration(
-                    labelText: "Ubah Status",
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: Icon(Icons.sync_rounded, color: statusColor),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: statusColor, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                  ),
-                  items: _statuses.map((status) {
-                    return DropdownMenuItem(
-                      value: status,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 9,
-                            height: 9,
-                            decoration: BoxDecoration(
-                              color: getStatusColor(status),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(getStatusText(status)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null && value != order.status) {
-                      _updateStatus(order, value);
-                    }
-                  },
-                ),
-        ],
+        ),
       ),
     );
   }
