@@ -20,6 +20,7 @@ class SocketService {
 
   SocketDataHandler? _onOrderReceived;
   SocketDataHandler? _onOrderStatusUpdated;
+  SocketDataHandler? _onOrderCancelled;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -27,12 +28,14 @@ class SocketService {
     required String serverUrl,
     SocketDataHandler? onOrderReceived,
     SocketDataHandler? onOrderStatusUpdated,
+    SocketDataHandler? onOrderCancelled,
     VoidCallback? onConnected,
     VoidCallback? onDisconnected,
   }) {
     _serverUrl = serverUrl;
     _onOrderReceived = onOrderReceived;
     _onOrderStatusUpdated = onOrderStatusUpdated;
+    _onOrderCancelled = onOrderCancelled;
     _onConnected = onConnected;
     _onDisconnected = onDisconnected;
 
@@ -105,14 +108,13 @@ class SocketService {
 
     socket.off('order:received');
     socket.off('order:status_updated');
+    socket.off('order:cancelled_received');
 
     socket.on('order:received', (data) {
       developer.log("order:received => $data");
 
       if (data is Map) {
-        _onOrderReceived?.call(
-          Map<String, dynamic>.from(data),
-        );
+        _onOrderReceived?.call(Map<String, dynamic>.from(data));
       }
     });
 
@@ -120,16 +122,20 @@ class SocketService {
       developer.log("order:status_updated => $data");
 
       if (data is Map) {
-        _onOrderStatusUpdated?.call(
-          Map<String, dynamic>.from(data),
-        );
+        _onOrderStatusUpdated?.call(Map<String, dynamic>.from(data));
+      }
+    });
+
+    socket.on('order:cancelled_received', (data) {
+      developer.log("order:cancelled_received => $data");
+
+      if (data is Map) {
+        _onOrderCancelled?.call(Map<String, dynamic>.from(data));
       }
     });
   }
 
-  void joinOwnerRoom({
-    required int ownerId,
-  }) {
+  void joinOwnerRoom({required int ownerId}) {
     final socket = _socket;
 
     if (socket == null || !socket.connected) {
@@ -137,16 +143,12 @@ class SocketService {
       return;
     }
 
-    socket.emit('owner:join', {
-      'ownerId': ownerId,
-    });
+    socket.emit('owner:join', {'ownerId': ownerId});
 
     developer.log("Owner join room: owner_$ownerId");
   }
 
-  void joinCustomerRoom({
-    required int customerId,
-  }) {
+  void joinCustomerRoom({required int customerId}) {
     final socket = _socket;
 
     if (socket == null || !socket.connected) {
@@ -154,9 +156,7 @@ class SocketService {
       return;
     }
 
-    socket.emit('customer:join', {
-      'customerId': customerId,
-    });
+    socket.emit('customer:join', {'customerId': customerId});
 
     developer.log("Customer join room: customer_$customerId");
   }
@@ -186,6 +186,31 @@ class SocketService {
     });
 
     developer.log("Emit order:new untuk owner_$ownerId");
+  }
+
+  void sendOrderCancelledByCustomer({
+    required int ownerId,
+    required int orderId,
+    required int customerId,
+    required String customerName,
+  }) {
+    final socket = _socket;
+
+    if (socket == null || !socket.connected) {
+      developer.log("sendOrderCancelledByCustomer gagal: socket belum connect");
+      return;
+    }
+
+    socket.emit('order:cancelled_by_customer', {
+      'ownerId': ownerId,
+      'orderId': orderId,
+      'customerId': customerId,
+      'customerName': customerName,
+      'message': '$customerName membatalkan pesanan #$orderId',
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+
+    developer.log("Emit order:cancelled_by_customer untuk owner_$ownerId");
   }
 
   void sendStatusChanged({
@@ -233,6 +258,7 @@ class SocketService {
       serverUrl: _serverUrl!,
       onOrderReceived: _onOrderReceived,
       onOrderStatusUpdated: _onOrderStatusUpdated,
+      onOrderCancelled: _onOrderCancelled,
       onConnected: _onConnected,
       onDisconnected: _onDisconnected,
     );

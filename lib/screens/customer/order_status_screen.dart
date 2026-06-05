@@ -227,6 +227,20 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       if (!mounted) return;
 
       if (result["success"] == true) {
+        final customerName = context.read<AuthProvider>().name;
+
+        final ownerId =
+            int.tryParse(result["owner_id"]?.toString() ?? "0") ?? 0;
+
+        if (ownerId > 0) {
+          _socketService.sendOrderCancelledByCustomer(
+            ownerId: ownerId,
+            orderId: order.id,
+            customerId: customerId,
+            customerName: customerName,
+          );
+        }
+
         if (!mounted) return;
 
         showMsg("Pesanan berhasil dibatalkan", success: true);

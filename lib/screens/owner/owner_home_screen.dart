@@ -47,7 +47,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     "ready",
     "delivered",
     "rejected",
-    "cancelled",
   ];
 
   @override
@@ -95,6 +94,38 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
           await NotificationService().showNotification(
             title: "Pesanan Baru",
             body: data["message"]?.toString() ?? "Ada pesanan baru masuk",
+          );
+        },
+        onOrderCancelled: (data) async {
+          debugPrint("Owner menerima event order:cancelled_received => $data");
+
+          await _loadOrders(showLoading: false, checkNewOrders: false);
+
+          if (!mounted) return;
+
+          final orderId = data["orderId"]?.toString() ?? "";
+
+          await NotificationService().showNotification(
+            title: "Pesanan Dibatalkan",
+            body: orderId.isNotEmpty
+                ? "Pesanan #$orderId dibatalkan oleh customer"
+                : "Ada pesanan yang dibatalkan oleh customer",
+          );
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                orderId.isNotEmpty
+                    ? "Pesanan #$orderId dibatalkan oleh customer"
+                    : "Ada pesanan yang dibatalkan oleh customer",
+              ),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           );
         },
         onConnected: () {
