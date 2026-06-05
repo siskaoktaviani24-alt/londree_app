@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/api_config.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../services/notification_service.dart';
+import '../../services/socket_service.dart';
 
 class OrderStatusScreen extends StatefulWidget {
   const OrderStatusScreen({super.key});
@@ -14,6 +17,8 @@ class OrderStatusScreen extends StatefulWidget {
 }
 
 class _OrderStatusScreenState extends State<OrderStatusScreen> {
+  final SocketService _socketService = SocketService();
+
   bool _isCancelling = false;
 
   final rupiah = NumberFormat.currency(
@@ -25,7 +30,10 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
   @override
   void initState() {
     super.initState();
-    loadOrders();
+
+    loadOrders().then((_) {
+      _connectCustomerSocket();
+    });
   }
 
   Future<void> loadOrders() async {
@@ -39,6 +47,50 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
       if (!mounted) return;
 
       showMsg("Gagal memuat pesanan: $e", success: false);
+    }
+  }
+
+  Future<void> _connectCustomerSocket() async {
+    try {
+      final customerId = await context.read<AuthProvider>().getCurrentUserId();
+
+      _socketService.connect(
+        serverUrl: ApiConfig.socketUrl,
+        onOrderStatusUpdated: (data) async {
+          debugPrint("Customer menerima event order:status_updated => $data");
+
+          await loadOrders();
+
+          if (!mounted) return;
+
+          final status = data["status"]?.toString() ?? "";
+          final orderId = data["orderId"]?.toString() ?? "";
+
+          await NotificationService().showNotification(
+            title: "Status Pesanan Diperbarui",
+            body: orderId.isNotEmpty
+                ? "Pesanan #$orderId sekarang ${statusText(status)}"
+                : "Status pesanan sekarang ${statusText(status)}",
+          );
+
+          if (!mounted) return;
+
+          showMsg(
+            orderId.isNotEmpty
+                ? "Status pesanan #$orderId diperbarui"
+                : "Status pesanan diperbarui",
+            success: true,
+          );
+        },
+        onConnected: () {
+          _socketService.joinCustomerRoom(customerId: customerId);
+        },
+        onDisconnected: () {
+          debugPrint("Socket customer terputus");
+        },
+      );
+    } catch (e) {
+      debugPrint("Gagal connect socket customer: $e");
     }
   }
 
@@ -846,6 +898,12 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
     }
 
     return Column(children: orders.map(orderCard).toList());
+  }
+
+  @override
+  void dispose() {
+    _socketService.disconnect();
+    super.dispose();
   }
 
   @override

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../config/api_config.dart';
 import '../../models/laundry_model.dart';
-import '../../services/auth_service.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/socket_service.dart';
 import '../../services/laundry_service.dart';
 import '../../services/order_service.dart';
 import '../../widgets/custom_button.dart';
@@ -18,7 +20,7 @@ class LaundryDetailScreen extends StatefulWidget {
 class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
   final laundryService = LaundryService();
   final orderService = OrderService();
-  final auth = AuthService();
+  final SocketService _socketService = SocketService();
 
   Map<String, dynamic>? laundry;
   List<LaundryServiceModel> services = [];
@@ -155,6 +157,30 @@ class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
       ),
+    );
+  }
+
+  void _sendNewOrderSocket({
+    required int ownerId,
+    required int laundryId,
+    required int orderId,
+    required int customerId,
+    required String customerName,
+  }) {
+    _socketService.connect(
+      serverUrl: ApiConfig.socketUrl,
+      onConnected: () {
+        _socketService.sendNewOrder(
+          ownerId: ownerId,
+          laundryId: laundryId,
+          orderId: orderId,
+          customerId: customerId,
+          customerName: customerName,
+        );
+      },
+      onDisconnected: () {
+        debugPrint("Socket customer terputus");
+      },
     );
   }
 
@@ -410,15 +436,22 @@ class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
                             return;
                           }
 
-                          final customerId = await auth.getUserId();
+                          final authProvider = context.read<AuthProvider>();
+                          final customerId = await authProvider
+                              .getCurrentUserId();
+                          final customerName = authProvider.name;
 
                           final selectedService = services.firstWhere(
                             (service) => service.id == selectedServiceId,
                           );
 
+                          final laundryId = int.parse(
+                            laundry!["id"].toString(),
+                          );
+
                           final result = await orderService.createOrder(
                             customerId: customerId,
-                            laundryId: int.parse(laundry!["id"].toString()),
+                            laundryId: laundryId,
                             serviceId: selectedService.id,
                             weight: weight,
                             pickupAddress: addressC.text.trim(),
@@ -430,6 +463,36 @@ class _LaundryDetailScreenState extends State<LaundryDetailScreen> {
                           showMsg(result["message"] ?? "Proses selesai");
 
                           if (result["success"] == true) {
+                            final responseData = result["data"] is Map
+                                ? Map<String, dynamic>.from(result["data"])
+                                : Map<String, dynamic>.from(result);
+
+                            final orderId =
+                                int.tryParse(
+                                  responseData["order_id"]?.toString() ?? "0",
+                                ) ??
+                                0;
+
+                            final ownerId =
+                                int.tryParse(
+                                  responseData["owner_id"]?.toString() ?? "0",
+                                ) ??
+                                0;
+
+                            if (ownerId > 0 && orderId > 0) {
+                              _sendNewOrderSocket(
+                                ownerId: ownerId,
+                                laundryId: laundryId,
+                                orderId: orderId,
+                                customerId: customerId,
+                                customerName: customerName,
+                              );
+                            } else {
+                              debugPrint(
+                                "Socket order:new tidak dikirim karena ownerId/orderId kosong",
+                              );
+                            }
+
                             Navigator.pop(context);
                             Navigator.pushNamed(context, "/order-status");
                           }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../services/socket_service.dart';
 
 class OrderManageScreen extends StatefulWidget {
   const OrderManageScreen({super.key});
@@ -14,6 +15,7 @@ class OrderManageScreen extends StatefulWidget {
 }
 
 class _OrderManageScreenState extends State<OrderManageScreen> {
+  final SocketService _socketService = SocketService();
   final rupiah = NumberFormat.currency(
     locale: "id_ID",
     symbol: "Rp ",
@@ -104,6 +106,14 @@ class _OrderManageScreenState extends State<OrderManageScreen> {
       orderId: order.id,
       status: status,
     );
+
+    if (result["success"] == true) {
+      _socketService.sendStatusChanged(
+        customerId: order.customerId,
+        orderId: order.id,
+        status: status,
+      );
+    }
 
     showMsg(result["message"] ?? "Status berhasil diperbarui");
   }

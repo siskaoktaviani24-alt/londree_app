@@ -10,6 +10,8 @@ import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/laundry_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/socket_service.dart';
 
 class OwnerHomeScreen extends StatefulWidget {
   const OwnerHomeScreen({super.key});
@@ -20,6 +22,9 @@ class OwnerHomeScreen extends StatefulWidget {
 
 class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   final LaundryService _laundryService = LaundryService();
+  final SocketService _socketService = SocketService();
+
+  // bool _socketConnected = false;
 
   bool _showWelcomeCard = false;
 
@@ -51,6 +56,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     _checkFirstTimeLogin();
 
     _loadHomeData().then((_) {
+      _connectOwnerSocket();
       _startOrderNotificationWatcher();
     });
   }
@@ -69,6 +75,38 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   Future<void> _refreshHome() async {
     await _loadLaundryData();
     await _loadOrders();
+  }
+
+  Future<void> _connectOwnerSocket() async {
+    try {
+      final ownerId = await context.read<AuthProvider>().getCurrentUserId();
+
+      _socketService.connect(
+        serverUrl: ApiConfig.socketUrl,
+        onOrderReceived: (data) async {
+          debugPrint("Owner menerima event order:received => $data");
+
+          await _loadOrders(showLoading: false, checkNewOrders: false);
+
+          if (!mounted) return;
+
+          _showNewOrderNotification(1);
+
+          await NotificationService().showNotification(
+            title: "Pesanan Baru",
+            body: data["message"]?.toString() ?? "Ada pesanan baru masuk",
+          );
+        },
+        onConnected: () {
+          _socketService.joinOwnerRoom(ownerId: ownerId);
+        },
+        onDisconnected: () {
+          debugPrint("Socket owner terputus");
+        },
+      );
+    } catch (e) {
+      debugPrint("Gagal connect socket owner: $e");
+    }
   }
 
   void _startOrderNotificationWatcher() {
@@ -409,6 +447,14 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
     if (!mounted) return;
 
+    if (result["success"] == true) {
+      _socketService.sendStatusChanged(
+        customerId: order.customerId,
+        orderId: order.id,
+        status: status,
+      );
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result["message"] ?? "Status berhasil diperbarui"),
@@ -419,6 +465,8 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> logout(BuildContext context) async {
+    _socketService.disconnect();
+
     context.read<OrderProvider>().clearOrders();
 
     await context.read<AuthProvider>().logout();
