@@ -10,6 +10,7 @@ import 'providers/auth_provider.dart';
 import 'providers/order_provider.dart';
 
 import 'services/notification_service.dart';
+import 'services/fcm_service.dart';
 
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -31,6 +32,8 @@ Future<void> main() async {
 
   await NotificationService().init();
   await NotificationService().requestNotificationPermission();
+  
+  await FcmService().init();
 
   runApp(
     MultiProvider(
