@@ -31,6 +31,20 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   String? _laundryName;
   String? _laundryPhotoUrl;
 
+  String _selectedStatusFilter = "all";
+
+  final List<String> _statusFilters = [
+    "all",
+    "pending",
+    "accepted",
+    "picked_up",
+    "washing",
+    "ready",
+    "delivered",
+    "rejected",
+    "cancelled",
+  ];
+
   Timer? _notificationTimer;
 
   final rupiah = NumberFormat.currency(
@@ -434,30 +448,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
                 SizedBox(
                   width: double.infinity,
-                  // child: ElevatedButton.icon(
-                  //   onPressed: () async {
-                  //     Navigator.pop(bottomSheetContext);
-
-                  //     await Navigator.pushNamed(
-                  //       this.context,
-                  //       "/order-manage",
-                  //     );
-
-                  //     if (!mounted) return;
-
-                  //     await _loadOrders();
-                  //   },
-                  //   icon: const Icon(Icons.receipt_long_rounded),
-                  //   label: const Text("Buka Halaman Pesanan Masuk"),
-                  //   style: ElevatedButton.styleFrom(
-                  //     backgroundColor: Colors.blue.shade700,
-                  //     foregroundColor: Colors.white,
-                  //     padding: const EdgeInsets.symmetric(vertical: 13),
-                  //     shape: RoundedRectangleBorder(
-                  //       borderRadius: BorderRadius.circular(14),
-                  //     ),
-                  //   ),
-                  // ),
                 ),
               ],
             ),
@@ -1459,9 +1449,36 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     );
   }
 
+  String getFilterText(String status) {
+    if (status == "all") return "Semua";
+    return getStatusText(status);
+  }
+
+  Color getFilterColor(String status) {
+    if (status == "all") return Colors.blue;
+    return getStatusColor(status);
+  }
+
+  int getOrderCountByStatus(List<OrderModel> orders, String status) {
+    if (status == "all") return orders.length;
+
+    return orders.where((order) => order.status == status).length;
+  }
+
+  List<OrderModel> getFilteredOrders(List<OrderModel> orders) {
+    if (_selectedStatusFilter == "all") {
+      return orders;
+    }
+
+    return orders.where((order) {
+      return order.status == _selectedStatusFilter;
+    }).toList();
+  }
+
   Widget _buildOrdersSection() {
     final orderProvider = context.watch<OrderProvider>();
     final orders = orderProvider.ownerOrders;
+    final filteredOrders = getFilteredOrders(orders);
     final loadingOrders = orderProvider.loadingOwnerOrders;
 
     return Container(
@@ -1513,15 +1530,16 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () {
-                  _loadOrders();
-                },
-                icon: Icon(Icons.refresh_rounded, color: Colors.blue.shade700),
-              ),
             ],
           ),
+
           const SizedBox(height: 16),
+
+          if (orders.isNotEmpty) ...[
+            _buildStatusFilterSection(orders),
+            const SizedBox(height: 16),
+          ],
+
           if (loadingOrders)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 30),
@@ -1529,13 +1547,101 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             )
           else if (orders.isEmpty)
             _emptyOrders()
+          else if (filteredOrders.isEmpty)
+            _emptyFilteredOrders()
           else
             Column(
-              children: orders.map((order) {
+              children: filteredOrders.map((order) {
                 return _orderItem(order);
               }).toList(),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusFilterSection(List<OrderModel> orders) {
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _statusFilters.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final status = _statusFilters[index];
+          final selected = _selectedStatusFilter == status;
+          final color = getFilterColor(status);
+          final count = getOrderCountByStatus(orders, status);
+
+          return InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () {
+              setState(() {
+                _selectedStatusFilter = status;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+              decoration: BoxDecoration(
+                color: selected ? color.withOpacity(0.13) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: selected
+                      ? color.withOpacity(0.45)
+                      : Colors.grey.shade200,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (status != "all") ...[
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                  ],
+                  Text(
+                    getFilterText(status),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                      color: selected ? color : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? color.withOpacity(0.15) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? color.withOpacity(0.25)
+                            : Colors.grey.shade200,
+                      ),
+                    ),
+                    child: Text(
+                      "$count",
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: selected ? color : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1563,6 +1669,41 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
           const SizedBox(height: 4),
           Text(
             "Pesanan customer akan tampil di sini",
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyFilteredOrders() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 30),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.filter_alt_off_outlined,
+            size: 48,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Tidak ada pesanan ${getFilterText(_selectedStatusFilter).toLowerCase()}",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Coba pilih kategori status lainnya.",
             style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
           ),
         ],

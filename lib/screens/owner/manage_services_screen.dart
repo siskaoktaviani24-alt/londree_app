@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/laundry_service.dart';
-import '../../widgets/custom_button.dart';
 
 class ManageServicesScreen extends StatefulWidget {
   const ManageServicesScreen({super.key});
@@ -41,7 +40,9 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
 
       if (result["success"] == true) {
         final List serviceData = result["services"] ?? [];
-        services = serviceData.map((e) => Map<String, dynamic>.from(e)).toList();
+        services = serviceData
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       } else {
         showMsg(result["message"] ?? "Gagal mengambil data", false);
       }
@@ -54,12 +55,19 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
     }
   }
 
-  Future<void> saveService() async {
+  Future<bool> saveService() async {
     if (serviceNameC.text.trim().isEmpty ||
         priceC.text.trim().isEmpty ||
         estimatedC.text.trim().isEmpty) {
       showMsg("Nama layanan, harga, dan estimasi wajib diisi", false);
-      return;
+      return false;
+    }
+
+    final price = double.tryParse(priceC.text.trim());
+
+    if (price == null || price <= 0) {
+      showMsg("Harga layanan harus lebih dari 0", false);
+      return false;
     }
 
     setState(() => savingService = true);
@@ -73,32 +81,36 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
           ownerId: ownerId,
           serviceId: selectedServiceId!,
           serviceName: serviceNameC.text.trim(),
-          pricePerKg: double.tryParse(priceC.text.trim()) ?? 0,
+          pricePerKg: price,
           estimatedTime: estimatedC.text.trim(),
         );
       } else {
         result = await laundryService.addService(
           ownerId: ownerId,
           serviceName: serviceNameC.text.trim(),
-          pricePerKg: double.tryParse(priceC.text.trim()) ?? 0,
+          pricePerKg: price,
           estimatedTime: estimatedC.text.trim(),
         );
       }
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       showMsg(result["message"] ?? "Proses selesai", result["success"] == true);
 
       if (result["success"] == true) {
         resetServiceForm();
         await loadServices();
+        return true;
       }
+
+      return false;
     } catch (e) {
       showMsg("Gagal menyimpan layanan: $e", false);
-    }
-
-    if (mounted) {
-      setState(() => savingService = false);
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => savingService = false);
+      }
     }
   }
 
@@ -108,11 +120,15 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
       selectedServiceId = int.tryParse(service["id"].toString());
 
       serviceNameC.text = service["service_name"]?.toString() ?? "";
-      priceC.text = double.tryParse(service["price_per_kg"].toString())
-              ?.toStringAsFixed(0) ??
+      priceC.text =
+          double.tryParse(
+            service["price_per_kg"].toString(),
+          )?.toStringAsFixed(0) ??
           "0";
       estimatedC.text = service["estimated_time"]?.toString() ?? "";
     });
+
+    showServiceFormDialog();
   }
 
   void resetServiceForm() {
@@ -125,6 +141,310 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
     });
   }
 
+  void openAddServiceForm() {
+    resetServiceForm();
+    showServiceFormDialog();
+  }
+
+  void showServiceFormDialog() {
+    bool dialogSaving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void closeDialog() {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.pop(dialogContext);
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.78,
+                ),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(26),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Icon(
+                            isEditService
+                                ? Icons.edit_rounded
+                                : Icons.add_rounded,
+                            color: Colors.blue.shade700,
+                            size: 25,
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isEditService
+                                    ? "Edit Layanan"
+                                    : "Tambah Layanan",
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                isEditService
+                                    ? "Perbarui informasi layanan laundry"
+                                    : "Lengkapi data layanan baru",
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            onPressed: dialogSaving ? null : closeDialog,
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: Colors.grey.shade700,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    Divider(color: Colors.grey.shade200, height: 1),
+
+                    Flexible(
+                      child: SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.only(top: 18, bottom: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _serviceFieldLabel("Nama Layanan"),
+                            const SizedBox(height: 7),
+                            TextField(
+                              controller: serviceNameC,
+                              textInputAction: TextInputAction.next,
+                              decoration: cleanServiceInput(
+                                hint: "Contoh: Cuci Kering",
+                                icon: Icons.local_laundry_service_rounded,
+                              ),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            _serviceFieldLabel("Harga per Kg"),
+                            const SizedBox(height: 7),
+                            TextField(
+                              controller: priceC,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              decoration: cleanServiceInput(
+                                hint: "Contoh: 7000",
+                                icon: Icons.payments_rounded,
+                                prefixText: "Rp ",
+                              ),
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            _serviceFieldLabel("Estimasi Waktu"),
+                            const SizedBox(height: 7),
+                            TextField(
+                              controller: estimatedC,
+                              textInputAction: TextInputAction.done,
+                              decoration: cleanServiceInput(
+                                hint: "Contoh: 2 hari",
+                                icon: Icons.schedule_rounded,
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(13),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.blue.shade100),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    color: Colors.blue.shade700,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Expanded(
+                                    child: Text(
+                                      "Layanan ini akan muncul di halaman customer saat membuat pesanan.",
+                                      style: TextStyle(
+                                        fontSize: 12.3,
+                                        color: Colors.blue.shade800,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: dialogSaving
+                            ? null
+                            : () async {
+                                FocusManager.instance.primaryFocus?.unfocus();
+
+                                setDialogState(() {
+                                  dialogSaving = true;
+                                });
+
+                                final success = await saveService();
+
+                                if (!mounted) return;
+
+                                if (success) {
+                                  Navigator.pop(dialogContext);
+                                } else {
+                                  setDialogState(() {
+                                    dialogSaving = false;
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledForegroundColor: Colors.grey.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: dialogSaving
+                            ? const SizedBox(
+                                width: 19,
+                                height: 19,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                isEditService
+                                    ? "Simpan Perubahan"
+                                    : "Tambah Layanan",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      if (mounted) {
+        resetServiceForm();
+      }
+    });
+  }
+
+  Widget _serviceFieldLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.bold,
+        color: Colors.grey.shade800,
+      ),
+    );
+  }
+
+  InputDecoration cleanServiceInput({
+    required String hint,
+    required IconData icon,
+    String? prefixText,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      prefixText: prefixText,
+      prefixIcon: Icon(icon, color: Colors.blue.shade700, size: 21),
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.blue.shade700, width: 1.5),
+      ),
+    );
+  }
+
   Future<void> confirmDeleteService(Map<String, dynamic> service) async {
     final serviceName = service["service_name"]?.toString() ?? "layanan ini";
 
@@ -132,7 +452,9 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text("Hapus Layanan"),
           content: Text("Apakah kamu yakin ingin menghapus $serviceName?"),
           actions: [
@@ -246,70 +568,100 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
     final price = service["price_per_kg"]?.toString() ?? "0";
     final estimated = service["estimated_time"]?.toString() ?? "-";
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Colors.green.shade50.withOpacity(0.3),
-            ],
-          ),
-        ),
-        child: ListTile(
-          contentPadding: const EdgeInsets.all(12),
-          leading: Container(
-            padding: const EdgeInsets.all(10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.green.shade400, Colors.green.shade700],
-              ),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(15),
             ),
-            child: const Icon(
-              Icons.local_laundry_service,
-              color: Colors.white,
+            child: Icon(
+              Icons.local_laundry_service_rounded,
+              color: Colors.blue.shade700,
               size: 24,
             ),
           ),
-          title: Text(
-            serviceName,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
+
+          const SizedBox(width: 12),
+
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "${formatRupiah(price)} / kg",
-                  style: TextStyle(
-                    color: Colors.green.shade700,
-                    fontWeight: FontWeight.w600,
+                  serviceName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  "⏱️ $estimated",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
+
+                const SizedBox(height: 6),
+
+                Row(
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 15,
+                      color: Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        estimated,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    "${formatRupiah(price)} / kg",
+                    style: TextStyle(
+                      color: Colors.blue.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          trailing: PopupMenuButton<String>(
+
+          const SizedBox(width: 8),
+
+          PopupMenuButton<String>(
+            padding: EdgeInsets.zero,
+            icon: Icon(Icons.more_vert_rounded, color: Colors.grey.shade700),
             onSelected: (value) {
               if (value == "edit") {
                 editService(service);
@@ -342,7 +694,7 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
               ];
             },
           ),
-        ),
+        ],
       ),
     );
   }
@@ -364,18 +716,19 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
           "Kelola Layanan",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.green.shade700,
-        centerTitle: false,
-        actions: [
-          IconButton(
-            onPressed: loadServices,
-            icon: const Icon(Icons.refresh),
-            tooltip: "Refresh",
-          ),
-        ],
       ),
+      floatingActionButton: loading
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: openAddServiceForm,
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                "Tambah Layanan",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
       body: loading
           ? const Center(
               child: Column(
@@ -390,190 +743,126 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
           : RefreshIndicator(
               onRefresh: loadServices,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
-                  // Section: Tambah/Edit Layanan
                   Container(
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.grey.shade200,
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                Icons.cleaning_services_rounded,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [Colors.green.shade400, Colors.green.shade700],
-                                      ),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      isEditService ? Icons.edit : Icons.add,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
                                   Text(
-                                    isEditService ? "Edit Layanan" : "Tambah Layanan Baru",
-                                    style: const TextStyle(
+                                    "Daftar Layanan Aktif",
+                                    style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                ],
-                              ),
-                              if (isEditService)
-                                TextButton.icon(
-                                  onPressed: resetServiceForm,
-                                  icon: const Icon(Icons.close, size: 18),
-                                  label: const Text("Batal"),
-                                  style: TextButton.styleFrom(
-                                    backgroundColor: Colors.grey.shade100,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    "Kelola layanan laundry yang tersedia",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: serviceNameC,
-                            decoration: deco("Nama Layanan", Icons.cleaning_services),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: priceC,
-                            keyboardType: TextInputType.number,
-                            decoration: deco("Harga per Kg", Icons.payments),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: estimatedC,
-                            decoration: deco("Estimasi Waktu", Icons.schedule),
-                          ),
-                          const SizedBox(height: 20),
-                          CustomButton(
-                            text: isEditService ? "Update Layanan" : "Tambah Layanan",
-                            loading: savingService,
-                            onPressed: saveService,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Section: Daftar Layanan
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.shade200,
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Colors.orange.shade400, Colors.orange.shade700],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.list_alt,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              const Text(
-                                "Daftar Layanan Aktif",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            ),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
                               ),
-                              const Spacer(),
-                              Text(
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
                                 "${services.length} Layanan",
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade700,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          if (services.isEmpty)
-                            Container(
-                              padding: const EdgeInsets.all(40),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.inbox_outlined,
-                                    size: 60,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    "Belum ada layanan",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "Tambah layanan pertama Anda",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            Column(
-                              children: services.map(serviceItem).toList(),
                             ),
-                        ],
-                      ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        if (services.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 34),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.inbox_outlined,
+                                  size: 54,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  "Belum ada layanan",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Tekan tombol Tambah Layanan untuk membuat layanan pertama.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Column(children: services.map(serviceItem).toList()),
+                      ],
                     ),
                   ),
                 ],
