@@ -236,7 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     child: Icon(
                       Icons.person_add_alt_1,
-                      size: 60,
+                      size: 50,
                       color: Colors.blue.shade600,
                     ),
                   ),
@@ -246,14 +246,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const Text(
                     "Daftar Akun",
                     style: TextStyle(
-                      fontSize: 38,
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       letterSpacing: 1.5,
                     ),
                   ),
 
-                  const SizedBox(height: 6),
+                  // const SizedBox(height: 6),
 
                   Text(
                     "Buat akun Londree baru",
@@ -263,7 +263,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 35),
+                  const SizedBox(height: 20),
 
                   Container(
                     padding: const EdgeInsets.all(28),
