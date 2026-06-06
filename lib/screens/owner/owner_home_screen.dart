@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -30,6 +31,16 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   String? _laundryName;
   String? _laundryPhotoUrl;
+
+  List<Map<String, dynamic>> _ownerNotifications = [];
+  final Set<String> _readNotificationKeys = {};
+
+  int get _unreadOwnerNotificationCount {
+    return _ownerNotifications.where((notification) {
+      final key = notification["key"]?.toString() ?? "";
+      return !_readNotificationKeys.contains(key);
+    }).length;
+  }
 
   String _selectedStatusFilter = "all";
 
@@ -67,6 +78,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   void initState() {
     super.initState();
     _checkFirstTimeLogin();
+    _loadSavedNotifications();
 
     _loadHomeData().then((_) {
       _connectOwnerSocket();
@@ -90,6 +102,240 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     await _loadOrders();
   }
 
+  String _notificationKey({required String type, required int orderId}) {
+    return "$type-$orderId";
+  }
+
+  Future<void> _loadSavedNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedNotifications = prefs.getStringList("owner_notifications") ?? [];
+
+    final savedReadKeys =
+        prefs.getStringList("owner_read_notification_keys") ?? [];
+
+    final loadedNotifications = <Map<String, dynamic>>[];
+
+    for (final item in savedNotifications) {
+      try {
+        final decoded = jsonDecode(item);
+
+        if (decoded is Map) {
+          loadedNotifications.add(Map<String, dynamic>.from(decoded));
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _ownerNotifications = loadedNotifications;
+      _readNotificationKeys
+        ..clear()
+        ..addAll(savedReadKeys);
+    });
+  }
+
+  Future<void> _saveNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final encodedNotifications = _ownerNotifications.map((item) {
+      return jsonEncode(item);
+    }).toList();
+
+    await prefs.setStringList("owner_notifications", encodedNotifications);
+    await prefs.setStringList(
+      "owner_read_notification_keys",
+      _readNotificationKeys.toList(),
+    );
+  }
+
+  Future<void> _addOwnerNotification({
+    required String type,
+    required String title,
+    required String body,
+    required int orderId,
+  }) async {
+    if (orderId <= 0) return;
+
+    final key = _notificationKey(type: type, orderId: orderId);
+
+    final notification = {
+      "key": key,
+      "type": type,
+      "title": title,
+      "body": body,
+      "order_id": orderId,
+      "created_at": DateTime.now().toIso8601String(),
+    };
+
+    setState(() {
+      _ownerNotifications.removeWhere((item) {
+        return item["key"]?.toString() == key;
+      });
+
+      _ownerNotifications.insert(0, notification);
+
+      if (_ownerNotifications.length > 40) {
+        _ownerNotifications = _ownerNotifications.take(40).toList();
+      }
+    });
+
+    await _saveNotifications();
+  }
+
+  Future<void> _syncNotificationsFromOrders(List<OrderModel> orders) async {
+    bool changed = false;
+
+    final existingKeys = _ownerNotifications.map((item) {
+      return item["key"]?.toString() ?? "";
+    }).toSet();
+
+    for (final order in orders) {
+      String? type;
+      String? title;
+      String? body;
+
+      if (order.status == "pending") {
+        type = "new_order";
+        title = "Pesanan Baru";
+        body = "Pesanan #${order.id} dari ${order.customerName}";
+      } else if (order.status == "cancelled") {
+        type = "cancelled_order";
+        title = "Pesanan Dibatalkan";
+        body = "Pesanan #${order.id} dibatalkan oleh customer";
+      }
+
+      if (type == null || title == null || body == null) continue;
+
+      final key = _notificationKey(type: type, orderId: order.id);
+
+      if (existingKeys.contains(key)) continue;
+
+      _ownerNotifications.insert(0, {
+        "key": key,
+        "type": type,
+        "title": title,
+        "body": body,
+        "order_id": order.id,
+        "created_at": DateTime.now().toIso8601String(),
+      });
+
+      existingKeys.add(key);
+      changed = true;
+    }
+
+    if (_ownerNotifications.length > 40) {
+      _ownerNotifications = _ownerNotifications.take(40).toList();
+      changed = true;
+    }
+
+    if (changed) {
+      if (mounted) {
+        setState(() {});
+      }
+
+      await _saveNotifications();
+    }
+  }
+
+  Future<void> _markNotificationAsRead(String key) async {
+    if (key.trim().isEmpty) return;
+
+    setState(() {
+      _readNotificationKeys.add(key);
+    });
+
+    await _saveNotifications();
+  }
+
+  Future<void> _markAllNotificationsAsRead() async {
+    setState(() {
+      for (final notification in _ownerNotifications) {
+        final key = notification["key"]?.toString() ?? "";
+
+        if (key.isNotEmpty) {
+          _readNotificationKeys.add(key);
+        }
+      }
+    });
+
+    await _saveNotifications();
+  }
+
+  String _formatNotificationTime(String value) {
+    final date = DateTime.tryParse(value);
+
+    if (date == null) return "";
+
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) return "Baru saja";
+    if (diff.inMinutes < 60) return "${diff.inMinutes} menit lalu";
+    if (diff.inHours < 24) return "${diff.inHours} jam lalu";
+
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
+  Future<void> _openOrderFromNotification(
+    Map<String, dynamic> notification, {
+    BuildContext? bottomSheetContext,
+  }) async {
+    final key = notification["key"]?.toString() ?? "";
+    final orderId =
+        int.tryParse(notification["order_id"]?.toString() ?? "0") ?? 0;
+
+    await _markNotificationAsRead(key);
+
+    if (bottomSheetContext != null && Navigator.canPop(bottomSheetContext)) {
+      Navigator.pop(bottomSheetContext);
+    }
+
+    if (orderId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("ID pesanan tidak ditemukan"),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _loadOrders(showLoading: false, checkNewOrders: false);
+
+    if (!mounted) return;
+
+    final orders = context.read<OrderProvider>().ownerOrders;
+
+    OrderModel? selectedOrder;
+
+    for (final order in orders) {
+      if (order.id == orderId) {
+        selectedOrder = order;
+        break;
+      }
+    }
+
+    if (selectedOrder == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Pesanan #$orderId tidak ditemukan"),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+
+    _showOrderDetailDialog(selectedOrder);
+  }
+
   Future<void> _connectOwnerSocket() async {
     try {
       final ownerId = await context.read<AuthProvider>().getCurrentUserId();
@@ -103,11 +349,21 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
           if (!mounted) return;
 
+          final orderId = int.tryParse(data["orderId"]?.toString() ?? "0") ?? 0;
+          final body = data["message"]?.toString() ?? "Ada pesanan baru masuk";
+
+          await _addOwnerNotification(
+            type: "new_order",
+            title: "Pesanan Baru",
+            body: body,
+            orderId: orderId,
+          );
+
           _showNewOrderNotification(1);
 
           await NotificationService().showNotification(
             title: "Pesanan Baru",
-            body: data["message"]?.toString() ?? "Ada pesanan baru masuk",
+            body: body,
           );
         },
         onOrderCancelled: (data) async {
@@ -117,24 +373,29 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
           if (!mounted) return;
 
-          final orderId = data["orderId"]?.toString() ?? "";
+          final orderId = int.tryParse(data["orderId"]?.toString() ?? "0") ?? 0;
+
+          final body = orderId > 0
+              ? "Pesanan #$orderId dibatalkan oleh customer"
+              : "Ada pesanan yang dibatalkan oleh customer";
+
+          await _addOwnerNotification(
+            type: "cancelled_order",
+            title: "Pesanan Dibatalkan",
+            body: body,
+            orderId: orderId,
+          );
 
           await NotificationService().showNotification(
             title: "Pesanan Dibatalkan",
-            body: orderId.isNotEmpty
-                ? "Pesanan #$orderId dibatalkan oleh customer"
-                : "Ada pesanan yang dibatalkan oleh customer",
+            body: body,
           );
 
           if (!mounted) return;
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                orderId.isNotEmpty
-                    ? "Pesanan #$orderId dibatalkan oleh customer"
-                    : "Ada pesanan yang dibatalkan oleh customer",
-              ),
+              content: Text(body),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -244,6 +505,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         checkNewOrders: checkNewOrders,
       );
 
+      final orders = context.read<OrderProvider>().ownerOrders;
+      await _syncNotificationsFromOrders(orders);
+
       if (!mounted) return;
 
       if (newOrderCount > 0) {
@@ -273,8 +537,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   void _showNotificationSheet() {
-    final pendingOrders = context.read<OrderProvider>().pendingOrders;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -282,176 +544,269 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (bottomSheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 45,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final unreadCount = _unreadOwnerNotificationCount;
 
-                const SizedBox(height: 18),
-
-                Row(
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 45,
+                      height: 5,
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        Icons.notifications_active_rounded,
-                        color: Colors.orange.shade700,
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        "Notifikasi Pesanan Baru",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
 
-                const SizedBox(height: 16),
+                    const SizedBox(height: 18),
 
-                if (pendingOrders.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Column(
+                    Row(
                       children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          size: 54,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          "Belum ada notifikasi baru",
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w600,
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.notifications_active_rounded,
+                            color: Colors.blue.shade700,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Pesanan baru dari customer akan muncul di sini",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            "Notifikasi Pesanan",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
+                        if (unreadCount > 0)
+                          TextButton(
+                            onPressed: () async {
+                              await _markAllNotificationsAsRead();
+                              setSheetState(() {});
+                            },
+                            child: const Text("Tandai dibaca"),
+                          ),
                       ],
                     ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: pendingOrders.length,
-                      itemBuilder: (context, index) {
-                        final order = pendingOrders[index];
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.orange.shade100),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: Colors.orange.shade100,
-                                child: Icon(
-                                  Icons.receipt_long_rounded,
-                                  color: Colors.orange.shade700,
-                                ),
+                    const SizedBox(height: 14),
+
+                    if (_ownerNotifications.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 28),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.notifications_none_rounded,
+                              size: 54,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              "Belum ada notifikasi",
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w600,
                               ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Notifikasi pesanan akan muncul di sini",
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _ownerNotifications.length,
+                          itemBuilder: (context, index) {
+                            final notification = _ownerNotifications[index];
 
-                              const SizedBox(width: 12),
+                            final key = notification["key"]?.toString() ?? "";
+                            final title =
+                                notification["title"]?.toString() ??
+                                "Notifikasi";
+                            final body = notification["body"]?.toString() ?? "";
+                            final createdAt =
+                                notification["created_at"]?.toString() ?? "";
+                            final type = notification["type"]?.toString() ?? "";
 
-                              Expanded(
-                                child: Column(
+                            final isRead = _readNotificationKeys.contains(key);
+
+                            final color = type == "cancelled_order"
+                                ? Colors.red
+                                : Colors.blue;
+
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () async {
+                                await _openOrderFromNotification(
+                                  notification,
+                                  bottomSheetContext: bottomSheetContext,
+                                );
+
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isRead
+                                      ? Colors.grey.shade50
+                                      : color.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isRead
+                                        ? Colors.grey.shade200
+                                        : color.withOpacity(0.22),
+                                  ),
+                                ),
+                                child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      "Pesanan #${order.id}",
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                    Stack(
+                                      children: [
+                                        CircleAvatar(
+                                          backgroundColor: color.withOpacity(
+                                            0.12,
+                                          ),
+                                          child: Icon(
+                                            type == "cancelled_order"
+                                                ? Icons.cancel_outlined
+                                                : Icons.receipt_long_rounded,
+                                            color: color,
+                                          ),
+                                        ),
+                                        if (!isRead)
+                                          Positioned(
+                                            right: 1,
+                                            top: 1,
+                                            child: Container(
+                                              width: 9,
+                                              height: 9,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      order.customerName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      "${order.serviceName} • ${order.weight} kg",
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
+
+                                    const SizedBox(width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontWeight: isRead
+                                                        ? FontWeight.w600
+                                                        : FontWeight.bold,
+                                                    color: Colors.grey.shade900,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _formatNotificationTime(
+                                                  createdAt,
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  color: Colors.grey.shade500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            body,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12.2,
+                                              color: Colors.grey.shade700,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 7),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 9,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: isRead
+                                                      ? Colors.grey.shade200
+                                                      : color.withOpacity(0.12),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                child: Text(
+                                                  isRead
+                                                      ? "Sudah dilihat"
+                                                      : "Belum dilihat",
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isRead
+                                                        ? Colors.grey.shade600
+                                                        : color,
+                                                  ),
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              Icon(
+                                                Icons.chevron_right_rounded,
+                                                color: Colors.grey.shade500,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade100,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  "Baru",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange.shade800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                const SizedBox(height: 12),
-
-                SizedBox(
-                  width: double.infinity,
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1051,8 +1406,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Widget _buildOwnerNavbar() {
-    final orderProvider = context.watch<OrderProvider>();
-    final unreadNotifications = orderProvider.unreadNotifications;
+    final unreadNotifications = _unreadOwnerNotificationCount;
 
     return Container(
       height: 132,

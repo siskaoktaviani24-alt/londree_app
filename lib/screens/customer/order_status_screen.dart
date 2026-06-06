@@ -458,10 +458,6 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                     ],
                   ),
                 ),
-                _headerIconButton(
-                  icon: Icons.refresh_rounded,
-                  onTap: loadOrders,
-                ),
               ],
             ),
           ),
