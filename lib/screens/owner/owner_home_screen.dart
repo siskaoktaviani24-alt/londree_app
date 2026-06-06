@@ -29,6 +29,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   bool _showWelcomeCard = false;
 
+  String? _ownerName;
   String? _laundryName;
   String? _laundryPhotoUrl;
 
@@ -93,13 +94,24 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> _loadHomeData() async {
+    _loadOwnerName();
     await _loadLaundryData();
     await _loadOrders();
   }
 
   Future<void> _refreshHome() async {
+    _loadOwnerName();
     await _loadLaundryData();
     await _loadOrders();
+  }
+
+  void _loadOwnerName() {
+    final authProvider = context.read<AuthProvider>();
+    final name = authProvider.name;
+
+    setState(() {
+      _ownerName = name.trim().isNotEmpty ? name : "Owner";
+    });
   }
 
   String _notificationKey({required String type, required int orderId}) {
@@ -462,7 +474,9 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
             final name = laundry["name"]?.toString() ?? "";
             final photo = laundry["photo"]?.toString() ?? "";
 
-            _laundryName = name.trim().isNotEmpty ? name : "Nama Laundry";
+            _laundryName = name.trim().isNotEmpty
+                ? name
+                : (_ownerName ?? "Nama Laundry");
 
             if (photo.trim().isNotEmpty) {
               _laundryPhotoUrl = getFullPhotoUrl(photo);
@@ -470,13 +484,13 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
               _laundryPhotoUrl = null;
             }
           } else {
-            _laundryName = "Nama Laundry";
+            _laundryName = _ownerName ?? "Nama Laundry";
             _laundryPhotoUrl = null;
           }
         });
       } else {
         setState(() {
-          _laundryName = "Nama Laundry";
+          _laundryName = _ownerName ?? "Nama Laundry";
           _laundryPhotoUrl = null;
         });
       }
@@ -1599,7 +1613,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "Selamat datang, ${_laundryName ?? "Pemilik Laundry"}",
+              "Selamat datang, ${_ownerName ?? "Pemilik Laundry"}",
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

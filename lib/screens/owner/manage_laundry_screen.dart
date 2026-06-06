@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/api_config.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/laundry_service.dart';
 import '../../widgets/custom_button.dart';
@@ -50,9 +52,20 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
   }
 
   Future<void> loadOwnerLaundry() async {
-    setState(() => loading = true);
+    if (mounted) {
+      setState(() => loading = true);
+    }
 
     try {
+      String ownerName = "";
+
+      try {
+        ownerName = context.read<AuthProvider>().name.trim();
+      } catch (e) {
+        debugPrint("Gagal mengambil nama owner dari AuthProvider: $e");
+        ownerName = "";
+      }
+
       final ownerId = await auth.getUserId();
       final result = await laundryService.getOwnerLaundry(ownerId);
 
@@ -62,7 +75,10 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
         final laundry = result["laundry"];
 
         if (laundry != null) {
-          nameC.text = laundry["name"]?.toString() ?? "";
+          final laundryName = laundry["name"]?.toString() ?? "";
+
+          nameC.text = laundryName.trim().isNotEmpty ? laundryName : ownerName;
+
           descC.text = laundry["description"]?.toString() ?? "";
           addressC.text = laundry["address"]?.toString() ?? "";
           latC.text = laundry["latitude"]?.toString() ?? "-6.34800000";
@@ -76,17 +92,24 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
             currentPhotoUrl = null;
           }
         } else {
+          nameC.text = ownerName;
+          descC.clear();
+          addressC.clear();
+          latC.text = "-6.34800000";
+          lngC.text = "108.32400000";
           currentPhotoUrl = null;
         }
       } else {
         showMsg(result["message"] ?? "Gagal mengambil data", false);
       }
     } catch (e) {
-      showMsg("Gagal koneksi ke server: $e", false);
-    }
-
-    if (mounted) {
-      setState(() => loading = false);
+      if (mounted) {
+        showMsg("Gagal koneksi ke server: $e", false);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -160,9 +183,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
         content: Text(msg),
         backgroundColor: success ? Colors.green.shade700 : Colors.red.shade700,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -170,34 +191,21 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
   InputDecoration deco(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(
-        icon,
-        color: Colors.blue.shade600,
-      ),
+      prefixIcon: Icon(icon, color: Colors.blue.shade600),
       filled: true,
       fillColor: Colors.grey.shade50,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 15,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: Colors.grey.shade300,
-        ),
+        borderSide: BorderSide(color: Colors.grey.shade300),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: Colors.grey.shade300,
-        ),
+        borderSide: BorderSide(color: Colors.grey.shade300),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(
-          color: Colors.blue.shade600,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
       ),
     );
   }
@@ -216,27 +224,21 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
               decoration: BoxDecoration(
                 color: Colors.blue.shade50,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.blue.shade200,
-                  width: 2,
-                ),
+                border: Border.all(color: Colors.blue.shade200, width: 2),
               ),
               child: ClipOval(
                 child: selectedPhoto != null
-                    ? Image.file(
-                        selectedPhoto!,
-                        fit: BoxFit.cover,
-                      )
+                    ? Image.file(selectedPhoto!, fit: BoxFit.cover)
                     : currentPhotoUrl != null &&
-                            currentPhotoUrl!.trim().isNotEmpty
-                        ? Image.network(
-                            currentPhotoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return emptyPhoto();
-                            },
-                          )
-                        : emptyPhoto(),
+                          currentPhotoUrl!.trim().isNotEmpty
+                    ? Image.network(
+                        currentPhotoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return emptyPhoto();
+                        },
+                      )
+                    : emptyPhoto(),
               ),
             ),
           ),
@@ -245,10 +247,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
 
           TextButton.icon(
             onPressed: pickPhoto,
-            icon: Icon(
-              Icons.add_a_photo,
-              color: Colors.blue.shade700,
-            ),
+            icon: Icon(Icons.add_a_photo, color: Colors.blue.shade700),
             label: Text(
               "Pilih Foto Laundry",
               style: TextStyle(
@@ -287,9 +286,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
       appBar: AppBar(
         title: const Text(
           "Kelola Profil Laundry",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         elevation: 0,
         backgroundColor: Colors.white,
@@ -303,9 +300,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
         ],
       ),
       body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: loadOwnerLaundry,
               child: ListView(
@@ -343,10 +338,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
 
                         TextField(
                           controller: nameC,
-                          decoration: deco(
-                            "Nama Laundry",
-                            Icons.store,
-                          ),
+                          decoration: deco("Nama Laundry", Icons.store),
                         ),
 
                         const SizedBox(height: 14),
@@ -354,10 +346,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
                         TextField(
                           controller: descC,
                           maxLines: 2,
-                          decoration: deco(
-                            "Deskripsi",
-                            Icons.description,
-                          ),
+                          decoration: deco("Deskripsi", Icons.description),
                         ),
 
                         const SizedBox(height: 14),
@@ -365,10 +354,7 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
                         TextField(
                           controller: addressC,
                           maxLines: 2,
-                          decoration: deco(
-                            "Alamat",
-                            Icons.location_on,
-                          ),
+                          decoration: deco("Alamat", Icons.location_on),
                         ),
 
                         const SizedBox(height: 14),
@@ -380,13 +366,10 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
                                 controller: latC,
                                 keyboardType:
                                     const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                  signed: true,
-                                ),
-                                decoration: deco(
-                                  "Latitude",
-                                  Icons.map,
-                                ),
+                                      decimal: true,
+                                      signed: true,
+                                    ),
+                                decoration: deco("Latitude", Icons.map),
                               ),
                             ),
 
@@ -397,9 +380,9 @@ class _ManageLaundryScreenState extends State<ManageLaundryScreen> {
                                 controller: lngC,
                                 keyboardType:
                                     const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                  signed: true,
-                                ),
+                                      decimal: true,
+                                      signed: true,
+                                    ),
                                 decoration: deco(
                                   "Longitude",
                                   Icons.map_outlined,
