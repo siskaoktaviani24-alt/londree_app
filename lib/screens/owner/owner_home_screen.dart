@@ -33,6 +33,8 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   String? _laundryName;
   String? _laundryPhotoUrl;
 
+  int? _currentOwnerId;
+
   List<Map<String, dynamic>> _ownerNotifications = [];
   final Set<String> _readNotificationKeys = {};
 
@@ -79,7 +81,6 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   void initState() {
     super.initState();
     _checkFirstTimeLogin();
-    _loadSavedNotifications();
 
     _loadHomeData().then((_) {
       _connectOwnerSocket();
@@ -94,13 +95,21 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> _loadHomeData() async {
+    final ownerId = await context.read<AuthProvider>().getCurrentUserId();
+    _currentOwnerId = ownerId;
+
     _loadOwnerName();
+    await _loadSavedNotifications();
     await _loadLaundryData();
     await _loadOrders();
   }
 
   Future<void> _refreshHome() async {
+    final ownerId = await context.read<AuthProvider>().getCurrentUserId();
+    _currentOwnerId = ownerId;
+
     _loadOwnerName();
+    await _loadSavedNotifications();
     await _loadLaundryData();
     await _loadOrders();
   }
@@ -114,17 +123,32 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
     });
   }
 
+  String _ownerNotificationsKey(int ownerId) {
+    return "owner_${ownerId}_notifications";
+  }
+
+  String _ownerReadNotificationsKey(int ownerId) {
+    return "owner_${ownerId}_read_notification_keys";
+  }
+
   String _notificationKey({required String type, required int orderId}) {
     return "$type-$orderId";
   }
 
   Future<void> _loadSavedNotifications() async {
+    final ownerId =
+        _currentOwnerId ??
+        await context.read<AuthProvider>().getCurrentUserId();
+
+    _currentOwnerId = ownerId;
+
     final prefs = await SharedPreferences.getInstance();
 
-    final savedNotifications = prefs.getStringList("owner_notifications") ?? [];
+    final savedNotifications =
+        prefs.getStringList(_ownerNotificationsKey(ownerId)) ?? [];
 
     final savedReadKeys =
-        prefs.getStringList("owner_read_notification_keys") ?? [];
+        prefs.getStringList(_ownerReadNotificationsKey(ownerId)) ?? [];
 
     final loadedNotifications = <Map<String, dynamic>>[];
 
@@ -149,15 +173,25 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 
   Future<void> _saveNotifications() async {
+    final ownerId =
+        _currentOwnerId ??
+        await context.read<AuthProvider>().getCurrentUserId();
+
+    _currentOwnerId = ownerId;
+
     final prefs = await SharedPreferences.getInstance();
 
     final encodedNotifications = _ownerNotifications.map((item) {
       return jsonEncode(item);
     }).toList();
 
-    await prefs.setStringList("owner_notifications", encodedNotifications);
     await prefs.setStringList(
-      "owner_read_notification_keys",
+      _ownerNotificationsKey(ownerId),
+      encodedNotifications,
+    );
+
+    await prefs.setStringList(
+      _ownerReadNotificationsKey(ownerId),
       _readNotificationKeys.toList(),
     );
   }
@@ -1324,6 +1358,14 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
 
   Future<void> logout(BuildContext context) async {
     _socketService.disconnect();
+
+    _notificationTimer?.cancel();
+
+    setState(() {
+      _ownerNotifications.clear();
+      _readNotificationKeys.clear();
+      _currentOwnerId = null;
+    });
 
     context.read<OrderProvider>().clearOrders();
 

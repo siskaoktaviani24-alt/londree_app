@@ -639,21 +639,21 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  "#${order.id}",
-                  style: TextStyle(
-                    color: Colors.blue.shade700,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              // Container(
+              //   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+              //   decoration: BoxDecoration(
+              //     color: Colors.blue.shade50,
+              //     borderRadius: BorderRadius.circular(20),
+              //   ),
+              //   child: Text(
+              //     "#${order.id}",
+              //     style: TextStyle(
+              //       color: Colors.blue.shade700,
+              //       fontSize: 11.5,
+              //       fontWeight: FontWeight.bold,
+              //     ),
+              //   ),
+              // ),
             ],
           ),
           const SizedBox(height: 14),
